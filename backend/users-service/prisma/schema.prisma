@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  asset_owner
+  entrepreneur
+}
+
+enum UserStatus {
+  active
+  suspended
+  pending_verification
+}
+
+model UserProfile {
+  id           String     @id @default(uuid())
+  userId       String     @unique @map("user_id")
+  role         UserRole   @default(entrepreneur)
+  status       UserStatus @default(active)
+  displayName  String     @map("display_name")
+  bio          String?
+  avatarUrl    String?    @map("avatar_url")
+  contactEmail String?    @map("contact_email")
+  website      String?
+  location     String?
+  linkedin     String?
+  twitter      String?
+  github       String?
+  // Stats (cached counts updated by other services)
+  assetCount   Int        @default(0) @map("asset_count")
+  licenseCount Int        @default(0) @map("license_count")
+  deletedAt    DateTime?  @map("deleted_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  notificationSettings NotificationSettings?
+
+  @@map("user_profiles")
+}
+
+model NotificationSettings {
+  id              String  @id @default(uuid())
+  userId          String  @unique @map("user_id")
+  emailRequests   Boolean @default(true) @map("email_requests")
+  emailMessages   Boolean @default(true) @map("email_messages")
+  emailMarketing  Boolean @default(false) @map("email_marketing")
+  emailDigest     Boolean @default(true) @map("email_digest")
+  emailSecurity   Boolean @default(true) @map("email_security")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("notification_settings")
+}

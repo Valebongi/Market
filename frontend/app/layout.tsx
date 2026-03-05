@@ -1,0 +1,106 @@
+import type { Metadata } from "next";
+import { Inter, Poppins } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider } from "@/lib/theme-context";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  display: "swap",
+  variable: "--font-poppins",
+});
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://davinci-inventa.com";
+
+const DESCRIPTION =
+  "La plataforma para intermediar activos intelectuales en Argentina. Conecta titulares con emprendedores para licenciar software, diseños, modelos de negocio y más.";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Da Vinci Inventa – Marketplace de Licencias",
+    template: "%s | Da Vinci Inventa",
+  },
+  description: DESCRIPTION,
+  keywords: [
+    "marketplace licencias",
+    "propiedad intelectual Argentina",
+    "licencias software",
+    "licencias diseño",
+    "activos intelectuales",
+    "emprendedores",
+    "intermediación intelectual",
+    "Da Vinci Inventa",
+  ],
+  authors: [{ name: "Da Vinci Inventa", url: SITE_URL }],
+  creator: "Da Vinci Inventa",
+  publisher: "Da Vinci Inventa",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: SITE_URL,
+    siteName: "Da Vinci Inventa",
+    title: "Da Vinci Inventa – Marketplace de Licencias",
+    description: DESCRIPTION,
+    images: [
+      {
+        url: "/Logo DaVinci.png",
+        width: 512,
+        height: 512,
+        alt: "Da Vinci Inventa – Marketplace de Licencias",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Da Vinci Inventa – Marketplace de Licencias",
+    description: DESCRIPTION,
+    images: ["/Logo DaVinci.png"],
+  },
+  icons: {
+    icon: "/Logo DaVinci.png",
+    apple: "/Logo DaVinci.png",
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="es" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Preload del logo: es el LCP candidate en el Navbar (priority ya lo hace, esto refuerza en SSR) */}
+        <link rel="preload" href="/Logo DaVinci.png" as="image" />
+      </head>
+      <body className="min-h-screen bg-white dark:bg-[#0d1117] text-carbon-gray dark:text-gray-100 antialiased transition-colors duration-200">
+        <AuthProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </AuthProvider>
+      </body>
+    </html>
+  );
+}

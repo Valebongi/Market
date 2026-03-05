@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DomainSearch {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  query     String
+  results   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("domain_searches")
+}

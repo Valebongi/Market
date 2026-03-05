@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(printf:*)",
+      "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Codigo\\\\Marketplace\\\\frontend\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")",
+      "Bash(node -e:*)",
+      "Bash(cmd /c \"cd c:\\\\Codigo\\\\Marketplace\\\\frontend && npm install\")",
+      "Bash(cmd /c \"cd /d c:\\\\Codigo\\\\Marketplace\\\\frontend && npm install 2>&1\")",
+      "Bash(powershell -Command \"Set-Location 'c:\\\\Codigo\\\\Marketplace\\\\frontend'; npm install\":*)",
+      "Bash(powershell.exe -Command \"Get-Content ''C:\\\\Codigo\\\\Marketplace\\\\backend\\\\gateway\\\\package.json'' | Select-String ''start''\")",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/18/bin/psql.exe\":*)",
+      "Bash(head:*)",
+      "Bash(tail:*)"
+    ]
+  }
+}

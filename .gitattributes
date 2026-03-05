@@ -1,0 +1,21 @@
+# Normaliza line endings: LF en el repo, CRLF en Windows al checkout
+* text=auto eol=lf
+
+# Binarios — no tocar line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+
+# Lock files — tratar como texto pero no normalizar diffs
+package-lock.json text -diff
+yarn.lock text -diff

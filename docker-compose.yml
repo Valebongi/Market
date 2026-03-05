@@ -1,0 +1,172 @@
+version: '3.9'
+
+services:
+  # ─────────────────────── Database ───────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: davinci_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────── Gateway ────────────────────────
+  gateway:
+    build:
+      context: ./backend/gateway
+      dockerfile: Dockerfile
+    container_name: davinci_gateway
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      PORT: 8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: '7d'
+      AUTH_SERVICE_URL: http://auth-service:3001
+      ASSETS_SERVICE_URL: http://assets-service:3002
+      USERS_SERVICE_URL: http://users-service:3003
+      MESSAGING_SERVICE_URL: http://messaging-service:3004
+      DOMAINS_SERVICE_URL: http://domains-service:3005
+      ADMIN_SERVICE_URL: http://admin-service:3006
+    depends_on:
+      - auth-service
+      - assets-service
+      - users-service
+      - messaging-service
+      - domains-service
+      - admin-service
+
+  # ─────────────────────── Auth Service ───────────────────
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: davinci_auth
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_auth
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: '7d'
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      USERS_SERVICE_URL: http://users-service:3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Assets Service ─────────────────
+  assets-service:
+    build:
+      context: ./backend/assets-service
+      dockerfile: Dockerfile
+    container_name: davinci_assets
+    restart: unless-stopped
+    ports:
+      - '3002:3002'
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_assets
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Users Service ──────────────────
+  users-service:
+    build:
+      context: ./backend/users-service
+      dockerfile: Dockerfile
+    container_name: davinci_users
+    restart: unless-stopped
+    ports:
+      - '3003:3003'
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_users
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Messaging Service ──────────────
+  messaging-service:
+    build:
+      context: ./backend/messaging-service
+      dockerfile: Dockerfile
+    container_name: davinci_messaging
+    restart: unless-stopped
+    ports:
+      - '3004:3004'
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_messaging
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Domains Service ────────────────
+  domains-service:
+    build:
+      context: ./backend/domains-service
+      dockerfile: Dockerfile
+    container_name: davinci_domains
+    restart: unless-stopped
+    ports:
+      - '3005:3005'
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_domains
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Admin Service ──────────────────
+  admin-service:
+    build:
+      context: ./backend/admin-service
+      dockerfile: Dockerfile
+    container_name: davinci_admin
+    restart: unless-stopped
+    ports:
+      - '3006:3006'
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_admin
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── Frontend ───────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: davinci_frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

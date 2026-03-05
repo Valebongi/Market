@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd.exe /c \"dir C:\\\\Codigo\\\\Marketplace\\\\frontend\\\\components /s /b\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Codigo\\\\Marketplace\\\\backend'' -Name\")"
+    ]
+  }
+}

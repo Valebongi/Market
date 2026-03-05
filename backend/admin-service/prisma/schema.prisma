@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ModerationAction {
+  approved
+  rejected
+  flagged
+  restored
+}
+
+model ModerationLog {
+  id         String           @id @default(uuid())
+  assetId    String           @map("asset_id")
+  assetTitle String           @map("asset_title")
+  adminId    String           @map("admin_id")
+  action     ModerationAction
+  notes      String?
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@map("moderation_logs")
+}
+
+model MetricSnapshot {
+  id              String   @id @default(uuid())
+  date            DateTime @unique @db.Date
+  totalUsers      Int      @default(0) @map("total_users")
+  newUsers        Int      @default(0) @map("new_users")
+  totalAssets     Int      @default(0) @map("total_assets")
+  publishedAssets Int      @default(0) @map("published_assets")
+  totalRequests   Int      @default(0) @map("total_requests")
+  closedRequests  Int      @default(0) @map("closed_requests")
+  totalViews      Int      @default(0) @map("total_views")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("metric_snapshots")
+}
