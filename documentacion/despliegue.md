@@ -192,8 +192,10 @@ postgresql://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.RAILWAY_P
 > base `railway` por defecto — no sirve tal cual, hay que reescribir el nombre de la
 > base al final.
 
-Las migraciones de Prisma corren solas: el `CMD` de cada servicio es
-`npx prisma migrate deploy && node dist/main`.
+Las migraciones de Prisma corren solas: el `CMD` de cada servicio con base es
+`node node_modules/prisma/build/index.js migrate deploy && node dist/main`.
+No es `npx` a propósito, y las imágenes instalan `openssl` — el porqué está en
+**§6.1**, que es el fallo que tiró abajo el primer deploy.
 
 ### 3.3 Red interna (`*.railway.internal`)
 
@@ -513,17 +515,115 @@ docker run --rm -v Marketplace_assets_uploads:/data -v $(pwd):/backup \
 Las migraciones de Prisma se ejecutan **automáticamente** cuando los contenedores de servicios arrancan:
 
 ```dockerfile
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/main"]
 ```
 
 Para ejecutar migraciones manualmente:
 
 ```bash
 # Dentro del contenedor
-docker exec davinci_auth npx prisma migrate deploy
-docker exec davinci_assets npx prisma migrate deploy
+docker exec davinci_auth   node node_modules/prisma/build/index.js migrate deploy
+docker exec davinci_assets node node_modules/prisma/build/index.js migrate deploy
 # ... etc para cada servicio con DB
 ```
+
+### 6.1 Prisma sobre Alpine: `openssl` en LOS DOS stages
+
+> Esto es lo que rompió el primer deploy en Railway. La imagen construía bien y
+> el contenedor entraba en loop de reinicio con:
+>
+> ```
+> prisma:warn Prisma failed to detect the libssl/openssl version to use, and may
+> not work as expected. Defaulting to "openssl-1.1.x".
+> Error: Could not parse schema engine response: SyntaxError: Unexpected token
+> 'E', "Error load"... is not valid JSON
+> ```
+>
+> **No era la `DATABASE_URL` ni la red privada** — la conexión resolvía bien. Era
+> la imagen.
+
+Los `Dockerfile` de los seis servicios con base parten de `node:20-alpine`, que
+hoy resuelve a **Alpine 3.23 con OpenSSL 3.5.x** pero **no incluye `libssl`**.
+Sin esa librería, `@prisma/get-platform` no puede detectar la versión de OpenSSL,
+cae al default `openssl-1.1.x` y termina eligiendo un engine que no carga. El
+binario escupe texto plano donde el CLI espera JSON → `SyntaxError`.
+
+El detalle que hace perder un ciclo de deploy entero: **en el stage `builder` eso
+es solo un warning** (`prisma generate` sigue de largo y el build termina OK). El
+que muere es el **`runner`**, al ejecutar `migrate deploy` en el `CMD`. Por eso el
+`apk add` va en **los dos stages**, no en uno:
+
+```dockerfile
+RUN apk add --no-cache openssl libc6-compat
+```
+
+Tres reglas que no hay que romper al tocar estos Dockerfile:
+
+1. **El `apk add` va ANTES de `npm ci`.** El postinstall de `@prisma/engines`
+   detecta la plataforma *en tiempo de instalación* para decidir qué binario
+   descargar. Si `openssl` llega después, ya bajó el equivocado.
+2. **Va en `builder` Y en `runner`.** Son dos imágenes base distintas; instalarlo
+   en una no hace nada por la otra.
+3. **El target correcto de Prisma es `linux-musl-openssl-3.0.x`** — es el que
+   Prisma usa para cualquier OpenSSL 3.x sobre musl, no hay uno `3.5.x`. Con
+   `openssl` instalado la detección lo resuelve sola y **no hace falta declarar
+   `binaryTargets`** en `schema.prisma`. Si en algún futuro la detección volviera
+   a fallar, el fix explícito es:
+   ```prisma
+   generator client {
+     provider      = "prisma-client-js"
+     binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+   }
+   ```
+
+### 6.2 El CLI de Prisma se copia del `builder`, no se resuelve con `npx`
+
+En `messaging-service`, `domains-service` y `admin-service` el paquete `prisma`
+está en **`devDependencies`**, así que `npm ci --omit=dev` del `runner` **no lo
+instala**. Con el `CMD` viejo (`npx prisma migrate deploy`), `npx` no lo
+encontraba local y salía **a la red en cada arranque** a bajarse `prisma@latest`
+— o sea v6, contra un cliente y migraciones generadas con v5, y con un
+`npm registry` caído el contenedor ni levanta.
+
+La solución no toca ningún `package.json`: el `runner` copia del `builder` el CLI
+y los engines ya resueltos para `linux-musl-openssl-3.0.x`.
+
+```dockerfile
+COPY --from=builder /app/node_modules/prisma   ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma  ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma  ./node_modules/.prisma
+```
+
+Y el `CMD` lo invoca por path, sin pasar por `npx`:
+
+```dockerfile
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/main"]
+```
+
+Resultado: el CLI, el *query engine* y el *schema engine* del contenedor son
+byte por byte los mismos que se usaron para generar el cliente en el build.
+
+### 6.3 Otras dependencias nativas sobre Alpine
+
+| Paquete | Dónde | Estado |
+|---|---|---|
+| `bcrypt` 5.1.1 | `auth-service` | **OK.** Su `package_name` de node-pre-gyp incluye `{libc}`, y el release v5.1.1 publica `bcrypt_lib-...-napi-v3-linux-x64-musl.tar.gz`. Baja el prebuild musl y no compila nada. |
+| `sharp` | `frontend` (optionalDependency de `next` 15.1.6) | **OK.** El lockfile trae `@img/sharp-linuxmusl-x64` + `@img/sharp-libvips-linuxmusl-x64`. |
+| — | `gateway` | **Sin Prisma y sin nativos.** Es solo un proxy: su `Dockerfile` no lleva `apk add` y así debe quedar. |
+
+Dos avisos sobre `bcrypt`:
+
+- El prebuild se descarga **de GitHub durante el build**. Si GitHub no responde,
+  node-pre-gyp cae a `--fallback-to-build`, que necesita `python3 make g++` —
+  que las imágenes **no** traen. Si alguna vez ves `node-gyp` en el log de build,
+  ese es el motivo, y el arreglo es agregar `build-base python3` al `apk add`
+  **de los dos stages** (el `runner` también corre `npm ci`).
+- `libc6-compat` (gcompat) ya está instalado como red de seguridad para cualquier
+  binario nativo linkeado contra glibc.
+
+> **Nota:** la etiqueta base `node:20-alpine` **no está pineada**. Si un futuro
+> bump de Alpine cambia la familia de OpenSSL (a 4.x), `linux-musl-openssl-3.0.x`
+> deja de servir. Pinear a `node:20-alpine3.23` es la mitigación.
 
 ---
 
