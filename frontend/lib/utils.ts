@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
+import type { AssetStatus, LicenseType, UserRole } from "@/types";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -72,30 +73,30 @@ export function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export const ASSET_TYPE_LABELS: Record<string, string> = {
-  software: "Software y Apps",
-  brand: "Marca y Branding",
-  design: "Diseño",
-  business_model: "Modelo de Negocio",
-  content: "Contenido Digital",
-  project: "Proyecto",
-  other: "Otro",
-};
+// Las categorías de activos viven en un único lugar: lib/asset-categories.ts.
+// Se re-exportan acá por compatibilidad con los imports existentes de @/lib/utils.
+export {
+  ASSET_CATEGORIES,
+  ASSET_CATEGORY_VALUES,
+  ASSET_TYPE_LABELS,
+  getAssetCategoryLabel,
+  isAssetCategory,
+} from "@/lib/asset-categories";
 
-export const LICENSE_TYPE_LABELS: Record<string, string> = {
+export const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
   exclusive: "Exclusiva",
   non_exclusive: "No Exclusiva",
   temporary: "Temporal",
 };
 
-export const ASSET_STATUS_LABELS: Record<string, string> = {
+export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
   draft: "Borrador",
   published: "Publicado",
   flagged: "Revisión",
   archived: "Archivado",
 };
 
-export const ROLE_LABELS: Record<string, string> = {
+export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Administrador",
   asset_owner: "Titular",
   entrepreneur: "Emprendedor",

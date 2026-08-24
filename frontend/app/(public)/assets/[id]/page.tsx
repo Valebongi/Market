@@ -16,6 +16,8 @@ import {
 import Badge from "@/components/ui/Badge";
 import { ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber, formatRelativeTime } from "@/lib/utils";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
+import { ApiError } from "@/lib/http";
+import type { RawAsset } from "@/types";
 import AssetDetailSidebar from "@/components/assets/AssetDetailSidebar";
 import AssetOwnerInline from "@/components/assets/AssetOwnerInline";
 import type { Metadata } from "next";
@@ -36,6 +38,21 @@ function isImageUrl(url: string): boolean {
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Trae el activo desde el gateway (ruta pública, sin token).
+ * Sólo un 404 real del backend se traduce a `notFound()`; cualquier otro fallo
+ * (500, gateway caído, red) se propaga para que Next devuelva un error de
+ * servidor en vez de un 404 falso que Google podría usar para desindexar.
+ */
+async function fetchAsset(id: string): Promise<RawAsset> {
+  try {
+    return await assetsApi.get(id);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) notFound();
+    throw err;
+  }
 }
 
 const SITE_URL =
@@ -68,25 +85,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         images: [imageUrl],
       },
     };
-  } catch {
-    return {
-      title: "Activo no encontrado",
-      robots: { index: false, follow: false },
-    };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return {
+        title: "Activo no encontrado",
+        robots: { index: false, follow: false },
+      };
+    }
+    // Fallo transitorio del backend: no marcamos noindex para no perder la URL.
+    return { title: "Da Vinci Inventa" };
   }
 }
 
 export default async function AssetDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  let raw: any;
-  try {
-    raw = await assetsApi.get(id);
-  } catch {
-    notFound();
-  }
-
-  const asset = mapAsset(raw);
+  const asset = mapAsset(await fetchAsset(id));
 
   const priceDisplay =
     asset.priceType === "fixed" && asset.priceFixed != null && asset.priceFixed > 0

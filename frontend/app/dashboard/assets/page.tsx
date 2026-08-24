@@ -6,7 +6,7 @@ import { Plus, Search, LayoutGrid, List, Eye, MessageSquare, MoreHorizontal, Pen
 import Button from "@/components/ui/Button";
 import { AssetStatusBadge } from "@/components/ui/Badge";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber } from "@/lib/utils";
-import type { Asset, AssetType, LicenseType } from "@/types";
+import type { Asset, AssetCategory, LicenseType } from "@/types";
 import { useAuth } from "@/lib/auth-context";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 
@@ -46,7 +46,7 @@ function AssetGridCard({ asset, onArchive, onDelete, onPublish }: {
 
   const handleDelete = async () => {
     setMenuOpen(false);
-    if (!confirm("¿Eliminár este activo? Esta acción no se puede deshacer.")) return;
+    if (!confirm("¿Eliminar este activo? Esta acción no se puede deshacer.")) return;
     setActioning(true);
     try {
       await assetsApi.remove(asset.id);
@@ -128,22 +128,43 @@ function AssetTableRow({ asset, onArchive, onDelete, onPublish }: {
   onDelete: (id: string) => void;
   onPublish: (id: string) => void;
 }) {
+  const [actioning, setActioning] = useState(false);
+
   const handleArchive = async () => {
-    if (asset.status === "archived") {
-      await assetsApi.publish(asset.id);
-      onPublish(asset.id);
-    } else {
-      await assetsApi.archive(asset.id);
-      onArchive(asset.id);
+    setActioning(true);
+    try {
+      if (asset.status === "archived") {
+        await assetsApi.publish(asset.id);
+        onPublish(asset.id);
+      } else {
+        await assetsApi.archive(asset.id);
+        onArchive(asset.id);
+      }
+    } finally {
+      setActioning(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("¿Eliminar este activo? Esta acción no se puede deshacer.")) return;
+    setActioning(true);
+    try {
+      await assetsApi.remove(asset.id);
+      onDelete(asset.id);
+    } finally {
+      setActioning(false);
     }
   };
 
   return (
-    <tr className="hover:bg-snow-gray dark:hover:bg-white/5 transition-colors border-b border-fog-gray dark:border-white/10 last:border-0">
+    <tr className={cn(
+      "hover:bg-snow-gray dark:hover:bg-white/5 transition-colors border-b border-fog-gray dark:border-white/10 last:border-0",
+      actioning && "opacity-60 pointer-events-none"
+    )}>
       <td className="px-4 py-3">
         <div>
           <p className="text-sm font-medium text-carbon-gray dark:text-gray-100">{asset.title}</p>
-          <p className="text-xs text-slate-gray dark:text-gray-500">{ASSET_TYPE_LABELS[asset.assetType as AssetType] || asset.assetType}</p>
+          <p className="text-xs text-slate-gray dark:text-gray-500">{ASSET_TYPE_LABELS[asset.assetType as AssetCategory] || asset.assetType}</p>
         </div>
       </td>
       <td className="px-4 py-3 text-sm text-slate-gray dark:text-gray-400">{LICENSE_TYPE_LABELS[asset.licenseType as LicenseType] || asset.licenseType}</td>
@@ -177,6 +198,13 @@ function AssetTableRow({ asset, onArchive, onDelete, onPublish }: {
             title={asset.status === "archived" ? "Publicar" : "Archivar"}
           >
             <Archive className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="p-1.5 text-slate-gray dark:text-gray-400 hover:text-soft-coral rounded-lg hover:bg-snow-gray dark:hover:bg-white/10 transition-colors"
+            title="Eliminar"
+          >
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </td>

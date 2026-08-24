@@ -23,18 +23,24 @@ export function SavedAssetsProvider({ children }: { children: React.ReactNode })
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
+  // El efecto depende de la IDENTIDAD del usuario, no del objeto: `user` se
+  // re-crea en cada rehidratación del AuthProvider y meterlo en el array de
+  // dependencias re-dispararía el fetch sin que cambie nada. Derivando el id
+  // acá, el efecto no referencia `user` y las dependencias quedan completas.
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !userId) {
       setSavedIds(new Set());
       return;
     }
     setLoading(true);
     usersService
-      .getSavedAssets(user.id)
+      .getSavedAssets(userId)
       .then(({ data }) => setSavedIds(new Set(data)))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, userId]);
 
   const toggleSave = useCallback(
     async (assetId: string) => {

@@ -16,6 +16,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
 
+# NODE_ENV=production por defecto. CRÍTICO en auth-service: sin esto,
+# POST /auth/forgot-password devuelve el token de reseteo en el body de la
+# respuesta a cualquiera que conozca un email (auth.service.ts, `isDev`).
+ENV NODE_ENV=production
+
 EXPOSE 3001
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

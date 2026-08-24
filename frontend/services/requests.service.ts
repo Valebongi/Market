@@ -1,5 +1,11 @@
 import { apiFetch } from "@/lib/http";
-import type { LicenseRequest, RequestMessage, PaginatedResponse } from "@/types";
+import type {
+  AppNotification,
+  CreateLicenseRequestPayload,
+  LicenseRequest,
+  PaginatedResponse,
+  RequestMessage,
+} from "@/types";
 
 export const requestsService = {
   list: (role?: "requester" | "owner" | "all") =>
@@ -8,7 +14,11 @@ export const requestsService = {
   get: (id: string) =>
     apiFetch<LicenseRequest>(`/requests/${id}`),
 
-  create: (body: { assetId: string; message?: string; assetTitle?: string }) =>
+  /**
+   * `POST /requests` — espejo de `CreateRequestDto` de messaging-service.
+   * `assetTitle`, `ownerId` e `initialMessage` son obligatorios.
+   */
+  create: (body: CreateLicenseRequestPayload) =>
     apiFetch<LicenseRequest>("/requests", { method: "POST", body: JSON.stringify(body) }),
 
   sendMessage: (requestId: string, content: string) =>
@@ -17,6 +27,11 @@ export const requestsService = {
       body: JSON.stringify({ content }),
     }),
 
+  /**
+   * `PATCH /requests/:id/status`.
+   * El backend sólo acepta `accepted` | `rejected` | `closed`
+   * (ver `RequestStatusTransition`); `pending` es rechazado con 400.
+   */
   updateStatus: (requestId: string, status: string) =>
     apiFetch<LicenseRequest>(`/requests/${requestId}/status`, {
       method: "PATCH",
@@ -33,13 +48,5 @@ export const requestsService = {
     apiFetch<{ message: string }>("/requests/notifications/read-all", { method: "PATCH" }),
 };
 
-export interface AppNotification {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  body: string;
-  link?: string;
-  read: boolean;
-  createdAt: string;
-}
+// Re-export por compatibilidad: el tipo ahora vive en @/types.
+export type { AppNotification } from "@/types";

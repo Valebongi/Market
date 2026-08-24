@@ -51,8 +51,8 @@ function NewRequestForm() {
         ...(proposedTerms.trim() ? { proposedTerms: proposedTerms.trim() } : {}),
       });
       router.push("/dashboard/requests");
-    } catch (err: any) {
-      setError(err.message || "Error al enviar la solicitud");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al enviar la solicitud");
     } finally {
       setLoading(false);
     }

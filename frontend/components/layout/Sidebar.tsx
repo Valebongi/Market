@@ -30,6 +30,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useNotifications } from "@/lib/notifications-context";
 import NotificationPanel from "@/components/ui/NotificationPanel";
+import type { UserRole } from "@/types";
 
 interface SidebarLinkProps {
   href: string;
@@ -70,8 +71,9 @@ interface SidebarProps {
   user?: {
     name: string;
     email: string;
-    role: string;
-    avatarUrl?: string;
+    role: UserRole | string;
+    // El backend devuelve `null` (no `undefined`) para un avatar sin setear.
+    avatarUrl?: string | null;
   };
   pendingRequests?: number;
   mobileOpen?: boolean;
@@ -106,7 +108,10 @@ export default function Sidebar({ user, pendingRequests = 0, mobileOpen = false,
 
   const mainLinks = [
     { href: "/dashboard", icon: <LayoutDashboard className="h-5 w-5" />, label: "Dashboard", show: true },
-    { href: "/dashboard/assets", icon: <Package className="h-5 w-5" />, label: "Mis Activos", show: true },
+    // "Mis Activos" es la bandeja de publicación: sólo tiene sentido para el
+    // titular (y para el admin, que puede tener activos propios). El emprendedor
+    // no publica — para él este ítem abría una lista siempre vacía.
+    { href: "/dashboard/assets", icon: <Package className="h-5 w-5" />, label: "Mis Activos", show: isOwner || isAdmin },
     { href: "/dashboard/requests", icon: <MessageSquare className="h-5 w-5" />, label: "Solicitudes", badge: pendingRequests, show: true },
     { href: "/dashboard/explore", icon: <Search className="h-5 w-5" />, label: "Explorar Marketplace", show: true },
     { href: "/dashboard/domains", icon: <Globe className="h-5 w-5" />, label: "Dominios", show: true },

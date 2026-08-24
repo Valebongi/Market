@@ -1,0 +1,13 @@
+-- AlterTable
+-- Agrega la columna "cover_image_url" a la tabla "assets".
+--
+-- Esta columna ya existia en schema.prisma (Asset.coverImageUrl) y en las bases de
+-- desarrollo, pero nunca fue parte de una migracion: se habia aplicado a mano con el
+-- archivo suelto prisma/migrations/add_cover_image_url.sql, que Prisma ignora por no
+-- ser un directorio de migracion. Una base creada desde cero con `prisma migrate deploy`
+-- (el caso de produccion en Railway) nacia sin la columna, y como Prisma incluye todos
+-- los campos escalares en cada SELECT, cualquier findMany/findUnique sobre Asset fallaba.
+--
+-- Se usa IF NOT EXISTS para que la migracion sea idempotente y corra sin romper contra
+-- las bases existentes que ya tienen la columna aplicada a mano.
+ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "cover_image_url" TEXT;

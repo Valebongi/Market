@@ -22,7 +22,7 @@ export class CreateAssetDto {
   @MaxLength(5000)
   description: string;
 
-  @IsEnum(['software', 'design', 'business_model', 'content', 'other'])
+  @IsEnum(['software', 'design', 'business_model', 'content', 'brand', 'project', 'other'])
   category: string;
 
   @IsEnum(['exclusive', 'non_exclusive', 'temporary'])

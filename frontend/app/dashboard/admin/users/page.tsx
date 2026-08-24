@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Eye, Edit2, UserX, UserCheck } from "lucide-react";
+import { Search, Edit2, UserX, UserCheck } from "lucide-react";
 import { RoleBadge } from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";

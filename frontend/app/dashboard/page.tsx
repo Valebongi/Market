@@ -51,9 +51,9 @@ export default function DashboardPage() {
         const assets = assetsRes?.data || [];
         const requests = requestsRes?.data || [];
 
-        const totalViews = assets.reduce((sum: number, a: any) => sum + (a.viewCount || 0), 0);
-        const activeLicenses = requests.filter((r: any) => r.status === "accepted").length;
-        const pending = requests.filter((r: any) => r.status === "pending").length;
+        const totalViews = assets.reduce((sum, a) => sum + (a.viewCount || 0), 0);
+        const activeLicenses = requests.filter((r) => r.status === "accepted").length;
+        const pending = requests.filter((r) => r.status === "pending").length;
 
         setStats({
           assetsPublished: assetsRes?.total ?? assets.length,
@@ -63,7 +63,7 @@ export default function DashboardPage() {
         });
         setPendingCount(pending);
 
-        const activity: ActivityItem[] = requests.slice(0, 5).map((r: any) => ({
+        const activity: ActivityItem[] = requests.slice(0, 5).map((r) => ({
           id: r.id,
           status: r.status,
           message: `${r.status === "pending" ? "Nueva solicitud" : r.status === "accepted" ? "Solicitud aceptada" : "Solicitud"} para ${r.assetTitle || "un activo"}`,

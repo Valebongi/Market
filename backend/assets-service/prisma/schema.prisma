@@ -19,6 +19,8 @@ enum AssetType {
   design
   business_model
   content
+  brand
+  project
   other
 }
 

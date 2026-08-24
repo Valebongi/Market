@@ -22,6 +22,13 @@ declare global {
   }
 }
 
+/** Claims del ID token de Google que consumimos acá (JWT decodificado). */
+interface GoogleIdTokenPayload {
+  sub: string;
+  email: string;
+  name?: string;
+}
+
 interface OAuthButtonsProps {
   returnTo?: string;
   mode?: "login" | "register";
@@ -52,10 +59,12 @@ export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsP
       callback: async (response: { credential: string }) => {
         try {
           const [, b64] = response.credential.split(".");
-          const payload = JSON.parse(atob(b64.replace(/-/g, "+").replace(/_/g, "/")));
+          const payload: GoogleIdTokenPayload = JSON.parse(
+            atob(b64.replace(/-/g, "+").replace(/_/g, "/"))
+          );
           await loginWithOAuth("google", payload.sub, payload.email, payload.name || payload.email, returnTo);
-        } catch (err: any) {
-          setError(err.message || "Error al iniciar sesión con Google");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Error al iniciar sesión con Google");
           setLoadingProvider(null);
         }
       },

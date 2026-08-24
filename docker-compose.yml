@@ -32,11 +32,17 @@ services:
       - '8080:8080'
     environment:
       PORT: 8080
+      NODE_ENV: ${NODE_ENV:-production}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_AUTH_TTL: ${RATE_LIMIT_AUTH_TTL:-60000}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-5}
+      RATE_LIMIT_TRUSTED_IPS: ${RATE_LIMIT_TRUSTED_IPS:-}
+      # 1 = hay un reverse proxy (nginx/Caddy) delante. 0 si el gateway se expone directo.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       AUTH_SERVICE_URL: http://auth-service:3001
       ASSETS_SERVICE_URL: http://assets-service:3002
       USERS_SERVICE_URL: http://users-service:3003
@@ -68,6 +74,9 @@ services:
       - '3001:3001'
     environment:
       PORT: 3001
+      # OBLIGATORIO. Sin NODE_ENV=production, auth-service devuelve el token
+      # de reseteo en la respuesta de POST /auth/forgot-password.
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
@@ -94,6 +103,8 @@ services:
       - '3002:3002'
     environment:
       PORT: 3002
+      # Producción por defecto (ver nota en auth-service).
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_assets
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # URL reachable by the browser for uploaded image paths
@@ -121,6 +132,8 @@ services:
       - '3003:3003'
     environment:
       PORT: 3003
+      # Producción por defecto (ver nota en auth-service).
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_users
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
@@ -144,6 +157,8 @@ services:
       - '3004:3004'
     environment:
       PORT: 3004
+      # Producción por defecto (ver nota en auth-service).
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_messaging
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
@@ -167,6 +182,8 @@ services:
       - '3005:3005'
     environment:
       PORT: 3005
+      # Producción por defecto (ver nota en auth-service).
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_domains
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
@@ -190,6 +207,8 @@ services:
       - '3006:3006'
     environment:
       PORT: 3006
+      # Producción por defecto (ver nota en auth-service).
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_admin
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
@@ -208,14 +227,27 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Baked at build time — must match the public URL of the gateway
+        # ── BUILD-TIME ────────────────────────────────────────────────────
+        # Next.js hornea estos valores en los chunks del cliente durante el
+        # build. Cambiarlos exige `docker compose build frontend` de nuevo:
+        # no alcanza con reiniciar el contenedor.
+        # Deben estar declarados con ARG en frontend/Dockerfile o se ignoran.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_GITHUB_CLIENT_ID: ${NEXT_PUBLIC_GITHUB_CLIENT_ID:-}
+        # Opcional: remotePattern http de next/image para uploads sin TLS.
+        ASSETS_SERVICE_URL: ${ASSETS_SERVICE_URL:-}
     container_name: davinci_frontend
     restart: unless-stopped
     ports:
       - '3000:3000'
     environment:
       NODE_ENV: production
+      # ── RUNTIME ─────────────────────────────────────────────────────────
+      # Secreto: se lee en el route handler /api/auth/github/callback, que corre
+      # en el server. NUNCA como build arg — quedaría horneado en la imagen.
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     depends_on:
       - gateway
 

@@ -1,22 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search, Globe, ExternalLink, Clock, AlertCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { apiFetch } from "@/lib/http";
 import { domainsService as domainsApi } from "@/services/domains.service";
+import type { DomainResult } from "@/types";
 
-interface DomainResult {
-  domain: string;
-  available: boolean;
-  price?: string;
-  premium?: boolean;
+/**
+ * Fila de `GET /domains/history` — es el modelo Prisma `DomainSearch` de
+ * domains-service: **una búsqueda entera**, no un dominio suelto.
+ * (`domainsService.history()` la declara como `DomainSearchResponse[]`, que es
+ * el shape de `POST /domains/search`; por eso acá se pide con `apiFetch`.)
+ */
+interface DomainSearchRecord {
+  id: string;
+  userId: string;
+  query: string;
+  results: DomainResult[];
+  createdAt: string;
 }
 
-interface SearchHistory {
+/** Lo que muestra la lista "Búsquedas Recientes". */
+interface SearchHistoryItem {
+  id: string;
   domain: string;
   available: boolean;
   searchedAt: string;
+}
+
+/**
+ * Cada búsqueda guarda N dominios (uno por extensión). Para la lista mostramos
+ * el primero disponible y, si ninguno lo está, el primero del lote.
+ */
+function toHistoryItems(records: DomainSearchRecord[]): SearchHistoryItem[] {
+  return records.map((record) => {
+    const results = record.results ?? [];
+    const highlighted = results.find((r) => r.available) ?? results[0];
+    return {
+      id: record.id,
+      domain: highlighted?.domain ?? record.query,
+      available: highlighted?.available ?? false,
+      searchedAt: record.createdAt,
+    };
+  });
 }
 
 const EXTENSIONS = [".com", ".io", ".app", ".tech", ".co", ".dev"];
@@ -26,21 +54,20 @@ export default function DomainsPage() {
   const [selectedExts, setSelectedExts] = useState<string[]>([]);
   const [results, setResults] = useState<DomainResult[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<SearchHistory[]>([]);
+  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+
+  const loadHistory = useCallback(
+    () =>
+      apiFetch<DomainSearchRecord[]>("/domains/history")
+        .then((records) => setHistory(toHistoryItems(records ?? []).slice(0, 10)))
+        .catch(() => setHistory([])),
+    []
+  );
 
   // Load search history on mount
   useEffect(() => {
-    domainsApi.history()
-      .then((data: any[]) => {
-        const mapped: SearchHistory[] = (data || []).map((h) => ({
-          domain: h.domainName || h.domain,
-          available: h.available,
-          searchedAt: h.searchedAt || h.createdAt,
-        }));
-        setHistory(mapped.slice(0, 10));
-      })
-      .catch(() => setHistory([]));
-  }, []);
+    loadHistory();
+  }, [loadHistory]);
 
   const toggleExt = (ext: string) => {
     setSelectedExts((prev) =>
@@ -56,23 +83,9 @@ export default function DomainsPage() {
       const base = query.trim().replace(/\.\w+$/, "");
       const extensions = selectedExts.length > 0 ? selectedExts : undefined;
       const res = await domainsApi.search(base, extensions);
-      const mapped: DomainResult[] = (res.results || []).map((r: any) => ({
-        domain: r.domain,
-        available: r.available,
-        price: r.price,
-      }));
-      setResults(mapped);
+      setResults(res.results ?? []);
       // Refresh history after search
-      domainsApi.history()
-        .then((data: any[]) => {
-          const mapped2: SearchHistory[] = (data || []).map((h) => ({
-            domain: h.domainName || h.domain,
-            available: h.available,
-            searchedAt: h.searchedAt || h.createdAt,
-          }));
-          setHistory(mapped2.slice(0, 10));
-        })
-        .catch(() => {});
+      loadHistory();
     } catch {
       setResults([]);
     } finally {
@@ -212,7 +225,7 @@ export default function DomainsPage() {
           <div className="space-y-2">
             {history.map((item) => (
               <div
-                key={item.domain}
+                key={item.id}
                 className="flex items-center justify-between bg-white border border-fog-gray rounded-xl px-5 py-3 hover:bg-snow-gray transition-colors"
               >
                 <div className="flex items-center gap-3">

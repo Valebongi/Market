@@ -7,7 +7,7 @@ export class FilterAssetsDto {
   search?: string;
 
   @IsOptional()
-  @IsEnum(['software', 'design', 'business_model', 'content', 'other'])
+  @IsEnum(['software', 'design', 'business_model', 'content', 'brand', 'project', 'other'])
   category?: string;
 
   @IsOptional()

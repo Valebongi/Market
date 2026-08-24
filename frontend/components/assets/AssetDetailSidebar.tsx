@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
 import ReputationBadges, { type OwnerStats } from "@/components/ui/ReputationBadges";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { useSavedAssets } from "@/lib/saved-assets-context";
 import { usersService as usersApi } from "@/services/users.service";

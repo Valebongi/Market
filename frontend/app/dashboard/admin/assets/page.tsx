@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, CheckCircle, XCircle, AlertTriangle, Eye } from "lucide-react";
+import { Search, CheckCircle, XCircle, Eye } from "lucide-react";
 import { AssetStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS } from "@/lib/utils";
 import { apiFetch } from "@/lib/http";
-import type { AssetType } from "@/types";
+import type { AssetCategory } from "@/types";
 
 interface RawAsset {
   id: string;
@@ -174,7 +174,7 @@ export default function AdminAssetsPage() {
                   <p className="text-xs text-slate-gray font-mono mt-0.5">{asset.ownerId.slice(0, 8)}…</p>
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-gray">
-                  {ASSET_TYPE_LABELS[asset.category as AssetType] ?? asset.category}
+                  {ASSET_TYPE_LABELS[asset.category as AssetCategory] ?? asset.category}
                 </td>
                 <td className="px-4 py-3">
                   <AssetStatusBadge status={asset.status} />
@@ -258,7 +258,7 @@ export default function AdminAssetsPage() {
             <div className="space-y-2 text-sm text-slate-gray">
               <p><span className="font-medium text-carbon-gray">ID Activo:</span> <span className="font-mono">{reviewAsset.id}</span></p>
               <p><span className="font-medium text-carbon-gray">ID Titular:</span> <span className="font-mono">{reviewAsset.ownerId}</span></p>
-              <p><span className="font-medium text-carbon-gray">Tipo:</span> {ASSET_TYPE_LABELS[reviewAsset.category as AssetType] ?? reviewAsset.category}</p>
+              <p><span className="font-medium text-carbon-gray">Tipo:</span> {ASSET_TYPE_LABELS[reviewAsset.category as AssetCategory] ?? reviewAsset.category}</p>
               <p><span className="font-medium text-carbon-gray">Estado actual:</span> {reviewAsset.status}</p>
               <p><span className="font-medium text-carbon-gray">Vistas / Solicitudes:</span> {reviewAsset.viewCount} / {reviewAsset.requestCount}</p>
             </div>

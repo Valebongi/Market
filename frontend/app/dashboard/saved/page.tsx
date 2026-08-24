@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Bookmark } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
 import { useSavedAssets } from "@/lib/saved-assets-context";
 import { assetsService, mapAsset } from "@/services/assets.service";
 import AssetCard from "@/components/assets/AssetCard";
 import type { Asset } from "@/types";
 
 export default function SavedAssetsPage() {
-  const { user } = useAuth();
   const { savedIds, loading: idsLoading } = useSavedAssets();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);

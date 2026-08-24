@@ -1,10 +1,5 @@
 import { apiFetch } from "@/lib/http";
-import type { AuthUser, ApiSuccessResponse } from "@/types";
-
-interface AuthResponse {
-  accessToken: string;
-  user: AuthUser;
-}
+import type { ApiSuccessResponse, AuthResponse } from "@/types";
 
 export const authService = {
   register: (body: { name: string; email: string; password: string; role: string }) =>

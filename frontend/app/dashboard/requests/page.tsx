@@ -53,7 +53,7 @@ export default function RequestsPage() {
   useEffect(() => {
     requestsApi.list("all")
       .then((res) => {
-        const mapped: Thread[] = (res.data || []).map((r: any) => ({
+        const mapped: Thread[] = (res.data || []).map((r) => ({
           id: r.id,
           assetId: r.assetId,
           assetTitle: r.assetTitle || `Activo ${r.assetId?.slice(0, 6)}`,
@@ -93,7 +93,7 @@ export default function RequestsPage() {
     setLoadingMessages(true);
     requestsApi.get(activeThreadId)
       .then((req) => {
-        let msgs: Message[] = (req.messages || []).map((m: any) => ({
+        let msgs: Message[] = (req.messages || []).map((m) => ({
           id: m.id,
           senderId: m.senderId,
           content: m.content,

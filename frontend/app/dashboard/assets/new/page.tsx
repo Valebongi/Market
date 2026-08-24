@@ -2,10 +2,10 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Check, ChevronRight, Upload, AlertCircle, ImagePlus, X, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/http";
 import { assetsService as assetsApi } from "@/services/assets.service";
+import type { RawAsset } from "@/types";
 import Input, { Textarea } from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
@@ -53,6 +53,33 @@ const ALLOWED_USES = [
   { value: "distribution", label: "Distribución" },
 ];
 
+/**
+ * Body de `POST /assets` — espejo exacto de `CreateAssetDto` de assets-service.
+ *
+ * OJO: NO es `Partial<RawAsset>`. En el **request** `tags` es `string[]`;
+ * en la **respuesta** el mismo campo vuelve como `Array<{ tag: string }>`.
+ * Por eso este POST va por `apiFetch` y no por `assetsService.create()`,
+ * cuya firma (`Partial<RawAsset>`) describe el modelo de lectura.
+ * Los enums (`category`/`licenseType`/`pricingType`) quedan como `string`
+ * igual que en el DTO del backend: la validación real la hace class-validator.
+ */
+interface CreateAssetPayload {
+  title: string;
+  description: string;
+  category: string;
+  licenseType: string;
+  pricingType: string;
+  price?: number;
+  currency?: string;
+  territory?: string;
+  duration?: string;
+  allowedUses?: string[];
+  restrictions?: string[];
+  tags?: string[];
+  links?: Array<{ label: string; url: string; isMain?: boolean }>;
+  coverImageUrl?: string;
+}
+
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-10">
@@ -95,7 +122,6 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
 }
 
 export default function NewAssetPage() {
-  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [published, setPublished] = useState(false);
@@ -205,7 +231,7 @@ export default function NewAssetPage() {
     setSubmitError("");
     try {
       // Map form state to backend DTO (category/pricingType/price)
-      const dto: Record<string, any> = {
+      const dto: CreateAssetPayload = {
         title: basicInfo.title,
         description: basicInfo.description,
         category: basicInfo.category || "other",
@@ -237,12 +263,15 @@ export default function NewAssetPage() {
         dto.links = allLinks;
       }
 
-      const created = await assetsApi.create(dto);
+      const created = await apiFetch<RawAsset>("/assets", {
+        method: "POST",
+        body: JSON.stringify(dto),
+      });
       await assetsApi.publish(created.id);
       setPublishedAssetId(created.id);
       setPublished(true);
-    } catch (err: any) {
-      setSubmitError(err.message || "Error al publicar el activo");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Error al publicar el activo");
     } finally {
       setLoading(false);
     }

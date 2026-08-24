@@ -27,7 +27,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold mb-3">1. Aceptación de los términos</h2>
             <p className="text-slate-gray dark:text-gray-400 leading-relaxed">
-              Al acceder y utilizar Da Vinci Inventa (la "Plataforma"), usted acepta estar sujeto a estos Términos y Condiciones. Si no está de acuerdo con alguno de estos términos, no podrá utilizar nuestros servicios.
+              Al acceder y utilizar Da Vinci Inventa (la &quot;Plataforma&quot;), usted acepta estar sujeto a estos Términos y Condiciones. Si no está de acuerdo con alguno de estos términos, no podrá utilizar nuestros servicios.
             </p>
           </section>
 
@@ -92,7 +92,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold mb-3">8. Limitación de responsabilidad</h2>
             <p className="text-slate-gray dark:text-gray-400 leading-relaxed">
-              Da Vinci Inventa no será responsable por daños directos, indirectos, incidentales o consecuentes derivados del uso de la Plataforma. La Plataforma se provee "tal como es" sin garantías de ningún tipo.
+              Da Vinci Inventa no será responsable por daños directos, indirectos, incidentales o consecuentes derivados del uso de la Plataforma. La Plataforma se provee &quot;tal como es&quot; sin garantías de ningún tipo.
             </p>
           </section>
 

@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════
+# Contexto de build del frontend (Next.js)
+#
+# Sin este archivo, el `COPY . .` del Dockerfile arrastra:
+#   - node_modules del host (pisa el `npm ci` de la imagen; binarios del SO equivocado)
+#   - .next  (build viejo del host)
+#   - .env.local  ← CONTIENE SECRETOS REALES (GITHUB_CLIENT_SECRET) y además
+#                   NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1, que Next
+#                   hornea en los chunks del cliente y rompe producción.
+# ══════════════════════════════════════════════════════════════
+
+# Dependencias y artefactos de build (se regeneran dentro de la imagen)
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# Variables de entorno — NUNCA entran a la imagen.
+# Los NEXT_PUBLIC_* de producción llegan por --build-arg (ver Dockerfile),
+# y los secretos de runtime (GITHUB_CLIENT_SECRET) por env del contenedor.
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Git / CI
+.git
+.gitignore
+.github
+
+# Editores y OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs y temporales
+*.log
+npm-debug.log*
+coverage
+.nyc_output

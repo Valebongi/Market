@@ -1,6 +1,14 @@
-export type AssetStatus = 'draft' | 'published' | 'archived' | 'under_review';
-export type AssetType = 'patent' | 'trademark' | 'copyright' | 'trade_secret' | 'software' | 'design' | 'other';
-export type LicenseType = 'exclusive' | 'non_exclusive' | 'open_source' | 'creative_commons' | 'custom';
+// Deben mantenerse en sync con los enums de prisma/schema.prisma.
+export type AssetStatus = 'draft' | 'published' | 'flagged' | 'archived';
+export type AssetType =
+  | 'software'
+  | 'design'
+  | 'business_model'
+  | 'content'
+  | 'brand'
+  | 'project'
+  | 'other';
+export type LicenseType = 'exclusive' | 'non_exclusive' | 'temporary';
 
 export interface AssetTag {
   id: string;

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Flame, Bookmark,
-  Code, Palette, Layers, Briefcase, FileText, Package,
+  Code, Palette, Layers, Briefcase, FileText, Package, Rocket,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn, ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber } from "@/lib/utils";
@@ -68,6 +68,14 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     iconBg: "bg-amber-500",
     Icon: FileText,
     priceAccent: "text-amber-700 dark:text-amber-400",
+  },
+  project: {
+    border: "border-l-cyan-500",
+    imageBg: "from-cyan-100 to-cyan-50 dark:from-cyan-950/60 dark:to-cyan-900/20",
+    badge: "bg-cyan-100/90 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800/40",
+    iconBg: "bg-cyan-500",
+    Icon: Rocket,
+    priceAccent: "text-cyan-700 dark:text-cyan-400",
   },
   other: {
     border: "border-l-slate-400",

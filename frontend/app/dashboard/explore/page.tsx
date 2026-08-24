@@ -15,6 +15,7 @@ const CATEGORIES = [
   { slug: "design", label: "Diseño" },
   { slug: "business_model", label: "Modelo de Negocio" },
   { slug: "content", label: "Contenido Digital" },
+  { slug: "project", label: "Proyecto" },
   { slug: "other", label: "Otro" },
 ];
 

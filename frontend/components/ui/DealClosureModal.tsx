@@ -64,6 +64,15 @@ export default function DealClosureModal({
               <span className="font-medium text-electric-blue dark:text-blue-400">{assetTitle}</span>
             </p>
           </div>
+          {/* Cerrar sin registrar resultado — equivale a "Omitir por ahora" */}
+          <button
+            type="button"
+            onClick={onSkip}
+            aria-label="Cerrar sin registrar"
+            className="shrink-0 p-1.5 -mr-1.5 -mt-1.5 rounded-lg text-slate-gray dark:text-gray-400 hover:text-carbon-gray dark:hover:text-gray-200 hover:bg-snow-gray dark:hover:bg-white/10 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="p-6 space-y-5">

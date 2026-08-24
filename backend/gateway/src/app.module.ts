@@ -1,9 +1,12 @@
 import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ProxyModule } from './modules/proxy/proxy.module';
 import { AuthMiddleware } from './common/auth.middleware';
+import { GatewayThrottlerGuard } from './common/gateway-throttler.guard';
+import { buildThrottlerOptions } from './common/throttler.config';
 
 @Module({
   imports: [
@@ -18,12 +21,13 @@ import { AuthMiddleware } from './common/auth.middleware';
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ([{
-        ttl: config.get<number>('RATE_LIMIT_TTL', 60000),
-        limit: config.get<number>('RATE_LIMIT_MAX', 100),
-      }]),
+      useFactory: buildThrottlerOptions,
     }),
     ProxyModule,
+  ],
+  providers: [
+    // Sin este APP_GUARD el ThrottlerModule queda decorativo: se configura pero nunca corre.
+    { provide: APP_GUARD, useClass: GatewayThrottlerGuard },
   ],
 })
 export class AppModule implements NestModule {

@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════
+# Contexto de build del servicio NestJS
+#
+# Sin este archivo el `COPY . .` del Dockerfile mete el node_modules del host
+# ENCIMA del que instaló `npm ci` (binarios nativos del SO equivocado, cliente
+# de Prisma generado para otra plataforma) y hornea cualquier `.env` real en
+# una capa de la imagen.
+#
+# OJO: `prisma/` NO se ignora — el stage `runner` hace `COPY prisma ./prisma`
+# para poder correr `npx prisma migrate deploy` al arrancar.
+# ══════════════════════════════════════════════════════════════
+
+# Dependencias y build (se regeneran dentro de la imagen)
+node_modules
+dist
+*.tsbuildinfo
+
+# Variables de entorno — NUNCA entran a la imagen (van como env del contenedor)
+.env
+.env.*
+!.env.example
+
+# Git / CI
+.git
+.gitignore
+.github
+
+# Editores y OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs, cobertura y temporales
+*.log
+npm-debug.log*
+coverage
+.nyc_output
+
+# Uploads subidos por usuarios: viven en un volumen/almacenamiento externo,
+# no dentro de la imagen.
+public/uploads

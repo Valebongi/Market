@@ -70,12 +70,14 @@ export default function SettingsPage() {
     location: "",
   });
 
+  // Las claves son las del modelo Prisma `NotificationSettings` de users-service.
+  // `emailSecurity` no se expone acá: las alertas de seguridad de la cuenta
+  // están siempre activas y no son configurables.
   const [notifications, setNotifications] = useState({
-    newRequest: true,
-    newMessage: true,
-    assetUpdates: false,
-    newsletter: false,
-    weeklyReport: true,
+    emailRequests: true,
+    emailMessages: true,
+    emailMarketing: false,
+    emailDigest: true,
   });
 
   // Load real profile data on mount
@@ -84,23 +86,21 @@ export default function SettingsPage() {
     setLoadingProfile(true);
     usersApi.getProfile(user.id)
       .then((data) => {
-        const d = data as unknown as Record<string, string>;
         setProfile({
-          displayName: d.displayName || user.profile?.displayName || "",
-          bio: d.bio || "",
-          website: d.website || "",
-          linkedin: d.linkedin || "",
-          twitter: d.twitter || "",
-          github: d.github || "",
-          location: d.location || "",
+          displayName: data.displayName || user.profile?.displayName || "",
+          bio: data.bio || "",
+          website: data.website || "",
+          linkedin: data.linkedin || "",
+          twitter: data.twitter || "",
+          github: data.github || "",
+          location: data.location || "",
         });
         if (data.notificationSettings) {
           setNotifications({
-            newRequest: data.notificationSettings.newRequest ?? true,
-            newMessage: data.notificationSettings.newMessage ?? true,
-            assetUpdates: data.notificationSettings.assetUpdates ?? false,
-            newsletter: data.notificationSettings.newsletter ?? false,
-            weeklyReport: data.notificationSettings.weeklyReport ?? true,
+            emailRequests: data.notificationSettings.emailRequests ?? true,
+            emailMessages: data.notificationSettings.emailMessages ?? true,
+            emailMarketing: data.notificationSettings.emailMarketing ?? false,
+            emailDigest: data.notificationSettings.emailDigest ?? true,
           });
         }
       })
@@ -129,8 +129,8 @@ export default function SettingsPage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) {
-      setSaveError(err.message || "Error al guardar");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Error al guardar");
     }
   };
 
@@ -141,8 +141,8 @@ export default function SettingsPage() {
       await usersApi.updateNotifications(user.id, notifications);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) {
-      setSaveError(err.message || "Error al guardar");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Error al guardar");
     }
   };
 
@@ -208,79 +208,102 @@ export default function SettingsPage() {
                 <p className="text-sm text-slate-gray mt-1">Esta información será visible para otros usuarios</p>
               </div>
 
-              {/* Avatar */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Avatar name={profile.displayName} size="xl" />
-                  <button className="absolute bottom-0 right-0 w-8 h-8 bg-electric-blue text-white rounded-full flex items-center justify-center shadow-medium hover:bg-blue-700 transition-colors">
-                    <Camera className="h-4 w-4" />
-                  </button>
+              {loadingProfile ? (
+                /* Sin este bloque el formulario se pinta vacío mientras carga:
+                   lo que escriba el usuario lo pisa la respuesta del GET, y un
+                   "Guardar" prematuro mandaría el perfil en blanco. */
+                <div className="space-y-5 animate-pulse" aria-busy="true">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-fog-gray" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-fog-gray rounded" />
+                      <div className="h-3 w-24 bg-fog-gray rounded" />
+                    </div>
+                  </div>
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="h-3 w-28 bg-fog-gray rounded" />
+                      <div className="h-11 w-full bg-fog-gray rounded-xl" />
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-carbon-gray">Foto de perfil</p>
-                  <p className="text-xs text-slate-gray mt-0.5">JPG, PNG · Máx. 2MB</p>
-                  <Button variant="ghost" size="sm" className="mt-2">Cambiar foto</Button>
+              ) : (
+                <>
+                {/* Avatar */}
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Avatar name={profile.displayName} size="xl" />
+                    <button className="absolute bottom-0 right-0 w-8 h-8 bg-electric-blue text-white rounded-full flex items-center justify-center shadow-medium hover:bg-blue-700 transition-colors">
+                      <Camera className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-carbon-gray">Foto de perfil</p>
+                    <p className="text-xs text-slate-gray mt-0.5">JPG, PNG · Máx. 2MB</p>
+                    <Button variant="ghost" size="sm" className="mt-2">Cambiar foto</Button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 gap-5">
-                <Input
-                  label="Nombre de Usuario / Empresa"
-                  value={profile.displayName}
-                  onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
-                  helperText="Este será tu identificador público"
-                  required
-                />
-                <Textarea
-                  label="Biografía"
-                  value={profile.bio}
-                  onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
-                  maxLength={300}
-                  showCount
-                  placeholder="Contanos sobre vos y tus proyectos"
-                />
-                <Input
-                  label="Website / Portfolio"
-                  type="url"
-                  value={profile.website}
-                  onChange={(e) => setProfile((p) => ({ ...p, website: e.target.value }))}
-                  placeholder="https://tu-sitio.com"
-                />
+                <div className="grid grid-cols-1 gap-5">
+                  <Input
+                    label="Nombre de Usuario / Empresa"
+                    value={profile.displayName}
+                    onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
+                    helperText="Este será tu identificador público"
+                    required
+                  />
+                  <Textarea
+                    label="Biografía"
+                    value={profile.bio}
+                    onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+                    maxLength={300}
+                    showCount
+                    placeholder="Contanos sobre vos y tus proyectos"
+                  />
+                  <Input
+                    label="Website / Portfolio"
+                    type="url"
+                    value={profile.website}
+                    onChange={(e) => setProfile((p) => ({ ...p, website: e.target.value }))}
+                    placeholder="https://tu-sitio.com"
+                  />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="LinkedIn"
-                    value={profile.linkedin}
-                    onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
-                    placeholder="https://linkedin.com/in/usuario"
-                  />
-                  <Input
-                    label="Twitter / X"
-                    value={profile.twitter}
-                    onChange={(e) => setProfile((p) => ({ ...p, twitter: e.target.value }))}
-                    placeholder="@usuario"
-                  />
-                  <Input
-                    label="GitHub"
-                    value={profile.github}
-                    onChange={(e) => setProfile((p) => ({ ...p, github: e.target.value }))}
-                    placeholder="usuario"
-                  />
-                  <Input
-                    label="Ubicación"
-                    value={profile.location}
-                    onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
-                    placeholder="Ciudad, País"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="LinkedIn"
+                      value={profile.linkedin}
+                      onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
+                      placeholder="https://linkedin.com/in/usuario"
+                    />
+                    <Input
+                      label="Twitter / X"
+                      value={profile.twitter}
+                      onChange={(e) => setProfile((p) => ({ ...p, twitter: e.target.value }))}
+                      placeholder="@usuario"
+                    />
+                    <Input
+                      label="GitHub"
+                      value={profile.github}
+                      onChange={(e) => setProfile((p) => ({ ...p, github: e.target.value }))}
+                      placeholder="usuario"
+                    />
+                    <Input
+                      label="Ubicación"
+                      value={profile.location}
+                      onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
+                      placeholder="Ciudad, País"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {saveError && <p className="text-xs text-soft-coral">{saveError}</p>}
-              <div className="flex items-center gap-3">
-                <Button onClick={handleSave} icon={saved ? <Check className="h-4 w-4" /> : undefined} variant={saved ? "success" : "primary"}>
-                  {saved ? "¡Guardado!" : "Guardar Cambios"}
-                </Button>
-              </div>
+                {saveError && <p className="text-xs text-soft-coral">{saveError}</p>}
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleSave} icon={saved ? <Check className="h-4 w-4" /> : undefined} variant={saved ? "success" : "primary"}>
+                    {saved ? "¡Guardado!" : "Guardar Cambios"}
+                  </Button>
+                </div>
+                </>
+              )}
             </div>
           )}
 
@@ -337,41 +360,46 @@ export default function SettingsPage() {
                   Notificaciones por Email
                 </h3>
                 <Toggle
-                  checked={notifications.newRequest}
-                  onChange={() => setNotifications((n) => ({ ...n, newRequest: !n.newRequest }))}
+                  checked={notifications.emailRequests}
+                  onChange={() => setNotifications((n) => ({ ...n, emailRequests: !n.emailRequests }))}
                   label="Nueva solicitud de licencia"
                   description="Te notificamos cuando alguien solicita licenciar tu activo"
                 />
                 <Toggle
-                  checked={notifications.newMessage}
-                  onChange={() => setNotifications((n) => ({ ...n, newMessage: !n.newMessage }))}
+                  checked={notifications.emailMessages}
+                  onChange={() => setNotifications((n) => ({ ...n, emailMessages: !n.emailMessages }))}
                   label="Nuevo mensaje"
                   description="Cuando hay un mensaje nuevo en una conversación"
                 />
                 <Toggle
-                  checked={notifications.assetUpdates}
-                  onChange={() => setNotifications((n) => ({ ...n, assetUpdates: !n.assetUpdates }))}
-                  label="Actualizaciones de activos"
-                  description="Cuando un activo que seguís cambia de estado"
+                  checked={notifications.emailDigest}
+                  onChange={() => setNotifications((n) => ({ ...n, emailDigest: !n.emailDigest }))}
+                  label="Resumen de actividad"
+                  description="Un email periódico con tus métricas y novedades de tus activos"
                 />
                 <Toggle
-                  checked={notifications.newsletter}
-                  onChange={() => setNotifications((n) => ({ ...n, newsletter: !n.newsletter }))}
-                  label="Newsletter mensual"
-                  description="Resumen de novedades de la plataforma"
+                  checked={notifications.emailMarketing}
+                  onChange={() => setNotifications((n) => ({ ...n, emailMarketing: !n.emailMarketing }))}
+                  label="Comunicación comercial"
+                  description="Novedades de la plataforma, lanzamientos y promociones"
                 />
               </div>
 
               <div className="bg-white border border-fog-gray rounded-xl px-6">
                 <h3 className="text-sm font-semibold text-slate-gray uppercase tracking-wide py-4 border-b border-fog-gray">
-                  Resumen Semanal
+                  Seguridad de la Cuenta
                 </h3>
-                <Toggle
-                  checked={notifications.weeklyReport}
-                  onChange={() => setNotifications((n) => ({ ...n, weeklyReport: !n.weeklyReport }))}
-                  label="Recibir resumen de actividad"
-                  description="Un email semanal con tus métricas y novedades"
-                />
+                <div className="flex items-start justify-between gap-4 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-carbon-gray">Alertas de seguridad</p>
+                    <p className="text-xs text-slate-gray mt-0.5">
+                      Inicios de sesión y cambios en tu cuenta. Siempre activas por tu seguridad.
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-slate-gray bg-fog-gray/50 rounded-full px-3 py-1 shrink-0">
+                    Siempre activas
+                  </span>
+                </div>
               </div>
 
               <Button onClick={handleSaveNotifications} variant={saved ? "success" : "primary"}>

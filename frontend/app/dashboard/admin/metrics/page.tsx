@@ -8,9 +8,10 @@ import { apiFetch } from "@/lib/http";
 
 const DATE_PRESETS = ["7 días", "30 días", "3 meses", "Año"];
 const RANGE_MAP: Record<string, string> = { "7 días": "7d", "30 días": "30d", "3 meses": "90d", "Año": "365d" };
-const CATEGORY_COLORS = ["#2563EB", "#4F46E5", "#059669", "#D97706", "#DC2626"];
+const CATEGORY_COLORS = ["#2563EB", "#4F46E5", "#059669", "#D97706", "#DC2626", "#DB2777", "#0891B2"];
 const CATEGORY_LABELS: Record<string, string> = {
-  software: "Software", design: "Diseño", business_model: "Negocio", content: "Contenido", other: "Otro",
+  software: "Software", brand: "Marca", design: "Diseño", business_model: "Negocio",
+  content: "Contenido", project: "Proyecto", other: "Otro",
 };
 
 interface MetricSnapshot {
@@ -210,7 +211,7 @@ export default function AdminMetricsPage() {
           <div className="h-72 flex flex-col items-center justify-center text-center gap-4 bg-snow-gray rounded-xl">
             <TrendingUp className="h-10 w-10 text-slate-gray/40" />
             <p className="text-slate-gray text-sm">No hay snapshots registrados para este período.</p>
-            <p className="text-xs text-slate-gray max-w-xs">Hacé clic en "Registrar Snapshot" para guardar el estado actual de la plataforma.</p>
+            <p className="text-xs text-slate-gray max-w-xs">Hacé clic en &quot;Registrar Snapshot&quot; para guardar el estado actual de la plataforma.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={320}>
