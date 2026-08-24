@@ -15,6 +15,12 @@ import {
 export class MessagingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async createNotification(userId: string, type: string, title: string, body: string, link?: string) {
+    return this.prisma.notification.create({
+      data: { userId, type, title, body, link },
+    }).catch(() => {});
+  }
+
   async createRequest(requesterId: string, dto: CreateRequestDto) {
     // Prevent users from requesting their own assets
     if (requesterId === dto.ownerId) {
@@ -35,7 +41,7 @@ export class MessagingService {
       throw new ConflictException('You already have a pending request for this asset');
     }
 
-    return this.prisma.licenseRequest.create({
+    const request = await this.prisma.licenseRequest.create({
       data: {
         assetId: dto.assetId,
         assetTitle: dto.assetTitle,
@@ -54,6 +60,16 @@ export class MessagingService {
         messages: true,
       },
     });
+
+    this.createNotification(
+      dto.ownerId,
+      'new_request',
+      'Nueva solicitud recibida',
+      `Alguien quiere licenciar "${dto.assetTitle}"`,
+      '/dashboard/requests',
+    );
+
+    return request;
   }
 
   async findRequestsByUser(userId: string, role: 'requester' | 'owner' | 'all', page: any = 1, limit: any = 20) {
@@ -146,6 +162,16 @@ export class MessagingService {
       data: { updatedAt: new Date() },
     });
 
+    // Notify the other party
+    const recipientId = request.requesterId === senderId ? request.ownerId : request.requesterId;
+    this.createNotification(
+      recipientId,
+      'new_message',
+      'Nuevo mensaje',
+      `Tenés un nuevo mensaje en la solicitud de "${request.assetTitle}"`,
+      '/dashboard/requests',
+    );
+
     return message;
   }
 
@@ -165,13 +191,33 @@ export class MessagingService {
       throw new ForbiddenException('You do not have access to this conversation');
     }
 
-    return this.prisma.licenseRequest.update({
+    const updated = await this.prisma.licenseRequest.update({
       where: { id: requestId },
       data: {
         status: dto.status,
         closedAt: ['closed', 'rejected'].includes(dto.status) ? new Date() : undefined,
       },
     });
+
+    // Notify the requester of status changes
+    const statusMessages: Record<string, { title: string; body: string }> = {
+      accepted: { title: 'Solicitud aceptada', body: `Tu solicitud de "${request.assetTitle}" fue aceptada` },
+      rejected: { title: 'Solicitud rechazada', body: `Tu solicitud de "${request.assetTitle}" fue rechazada` },
+      closed: { title: 'Conversación cerrada', body: `La conversación sobre "${request.assetTitle}" fue cerrada` },
+    };
+
+    if (statusMessages[dto.status]) {
+      const notifyUserId = userId === request.ownerId ? request.requesterId : request.ownerId;
+      this.createNotification(
+        notifyUserId,
+        `request_${dto.status}`,
+        statusMessages[dto.status].title,
+        statusMessages[dto.status].body,
+        '/dashboard/requests',
+      );
+    }
+
+    return updated;
   }
 
   async getUnreadCount(userId: string): Promise<number> {
@@ -193,6 +239,26 @@ export class MessagingService {
         deletedAt: null,
       },
     });
+  }
+
+  async getNotifications(userId: string, limit = 20) {
+    const [notifications, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      }),
+      this.prisma.notification.count({ where: { userId, read: false } }),
+    ]);
+    return { notifications, unreadCount };
+  }
+
+  async markNotificationsRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+    return { message: 'All notifications marked as read' };
   }
 
   async findAll(filters: { status?: string; page?: any; limit?: any }) {

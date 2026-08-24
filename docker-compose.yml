@@ -7,8 +7,8 @@ services:
     container_name: davinci_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: postgres
     ports:
       - '5432:5432'
@@ -16,7 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,8 +33,10 @@ services:
     environment:
       PORT: 8080
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_EXPIRES_IN: '7d'
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       AUTH_SERVICE_URL: http://auth-service:3001
       ASSETS_SERVICE_URL: http://assets-service:3002
       USERS_SERVICE_URL: http://users-service:3003
@@ -42,12 +44,18 @@ services:
       DOMAINS_SERVICE_URL: http://domains-service:3005
       ADMIN_SERVICE_URL: http://admin-service:3006
     depends_on:
-      - auth-service
-      - assets-service
-      - users-service
-      - messaging-service
-      - domains-service
-      - admin-service
+      auth-service:
+        condition: service_healthy
+      assets-service:
+        condition: service_healthy
+      users-service:
+        condition: service_healthy
+      messaging-service:
+        condition: service_healthy
+      domains-service:
+        condition: service_healthy
+      admin-service:
+        condition: service_healthy
 
   # ─────────────────────── Auth Service ───────────────────
   auth-service:
@@ -60,14 +68,20 @@ services:
       - '3001:3001'
     environment:
       PORT: 3001
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_auth
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_EXPIRES_IN: '7d'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_auth
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       USERS_SERVICE_URL: http://users-service:3003
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Assets Service ─────────────────
   assets-service:
@@ -80,11 +94,21 @@ services:
       - '3002:3002'
     environment:
       PORT: 3002
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_assets
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_assets
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # URL reachable by the browser for uploaded image paths
+      SERVICE_URL: ${ASSETS_PUBLIC_URL:-http://localhost:3002}
+    volumes:
+      - assets_uploads:/app/public/uploads
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3002/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Users Service ──────────────────
   users-service:
@@ -97,11 +121,17 @@ services:
       - '3003:3003'
     environment:
       PORT: 3003
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_users
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_users
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3003/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Messaging Service ──────────────
   messaging-service:
@@ -114,11 +144,17 @@ services:
       - '3004:3004'
     environment:
       PORT: 3004
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_messaging
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_messaging
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3004/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Domains Service ────────────────
   domains-service:
@@ -131,11 +167,17 @@ services:
       - '3005:3005'
     environment:
       PORT: 3005
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_domains
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_domains
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3005/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Admin Service ──────────────────
   admin-service:
@@ -148,25 +190,35 @@ services:
       - '3006:3006'
     environment:
       PORT: 3006
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/davinci_admin
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_admin
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3006/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─────────────────────── Frontend ───────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Baked at build time — must match the public URL of the gateway
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
     container_name: davinci_frontend
     restart: unless-stopped
     ports:
       - '3000:3000'
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
+      NODE_ENV: production
     depends_on:
       - gateway
 
 volumes:
   postgres_data:
+  assets_uploads:

@@ -1,39 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, CheckCircle, XCircle, AlertTriangle, Eye } from "lucide-react";
 import { AssetStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS } from "@/lib/utils";
+import { apiFetch } from "@/lib/http";
 import type { AssetType } from "@/types";
 
-interface ModerationAsset {
+interface RawAsset {
   id: string;
+  ownerId: string;
   title: string;
-  owner: string;
-  assetType: AssetType;
+  category: string;
   status: string;
-  reports: number;
+  viewCount: number;
+  requestCount: number;
   createdAt: string;
+  tags: { id: string; tag: string }[];
 }
 
-const MOCK_ASSETS: ModerationAsset[] = [
-  { id: "1", title: "Sistema IA para análisis de contratos", owner: "Tech Corp SA", assetType: "software", status: "flagged", reports: 3, createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString() },
-  { id: "2", title: "Framework de marketing viral", owner: "GrowthHacker", assetType: "business_model", status: "published", reports: 0, createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString() },
-  { id: "3", title: "Kit UI Dashboard Premium", owner: "DesignPro", assetType: "design", status: "published", reports: 0, createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString() },
-  { id: "4", title: "Modelo de negocio dudoso", owner: "Anónimo", assetType: "business_model", status: "flagged", reports: 5, createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString() },
-  { id: "5", title: "API de pagos integrada", owner: "FinDev Labs", assetType: "software", status: "published", reports: 0, createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString() },
-];
+interface PaginatedResponse {
+  data: RawAsset[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
-const STATUS_OPTIONS = ["Todos", "Publicados", "Flagged", "Archivados"];
+const STATUS_OPTIONS = ["Todos", "Publicados", "Borradores", "Archivados"];
+
+function statusLabel(filter: string): string | undefined {
+  const map: Record<string, string> = {
+    Publicados: "published",
+    Borradores: "draft",
+    Archivados: "archived",
+  };
+  return map[filter];
+}
 
 export default function AdminAssetsPage() {
+  const [assets, setAssets] = useState<RawAsset[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
-  const [reviewAsset, setReviewAsset] = useState<ModerationAsset | null>(null);
+  const [reviewAsset, setReviewAsset] = useState<RawAsset | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [checklist, setChecklist] = useState<string[]>([]);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const CHECKLIST_ITEMS = [
     "Contenido apropiado",
@@ -43,18 +58,60 @@ export default function AdminAssetsPage() {
     "Sin spam o duplicados",
   ];
 
-  const filtered = MOCK_ASSETS.filter((a) => {
-    const matchSearch = a.title.toLowerCase().includes(search.toLowerCase()) || a.owner.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "Todos" || (statusFilter === "Publicados" && a.status === "published") || (statusFilter === "Flagged" && a.status === "flagged");
-    return matchSearch && matchStatus;
-  });
+  async function fetchAssets() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "100", sortBy: "createdAt", sortOrder: "desc" });
+      if (search) params.set("search", search);
+      const st = statusLabel(statusFilter);
+      if (st) params.set("status", st);
+
+      const res = await apiFetch<PaginatedResponse>(`/assets?${params.toString()}`, { auth: false });
+      setAssets(res.data ?? []);
+      setTotal(res.total ?? 0);
+    } catch {
+      setAssets([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchAssets(); }, [search, statusFilter]);
+
+  async function handlePublish(asset: RawAsset) {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/assets/${asset.id}/publish`, { method: "PATCH" });
+      setAssets((prev) => prev.map((a) => a.id === asset.id ? { ...a, status: "published" } : a));
+      setReviewAsset(null);
+    } catch {
+      alert("No se pudo publicar el activo.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleArchive(asset: RawAsset) {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/assets/${asset.id}/archive`, { method: "PATCH" });
+      setAssets((prev) => prev.map((a) => a.id === asset.id ? { ...a, status: "archived" } : a));
+      setReviewAsset(null);
+    } catch {
+      alert("No se pudo archivar el activo.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   return (
     <div className="p-8 max-w-wide mx-auto">
       {/* Header */}
       <div className="pb-8 border-b border-fog-gray">
         <h1 className="text-3xl font-bold text-carbon-gray">Moderación de Activos</h1>
-        <p className="text-base text-slate-gray mt-1">Revisá y moderá los activos publicados</p>
+        <p className="text-base text-slate-gray mt-1">
+          {loading ? "Cargando..." : `${total} activos en la plataforma`}
+        </p>
       </div>
 
       {/* Filters */}
@@ -63,13 +120,13 @@ export default function AdminAssetsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-gray" />
           <input
             type="text"
-            placeholder="Buscar por título o usuario..."
+            placeholder="Buscar por título..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full h-10 pl-9 pr-4 border border-fog-gray rounded-lg text-sm bg-white focus:outline-none focus:border-electric-blue transition-colors"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {STATUS_OPTIONS.map((s) => (
             <button
               key={s}
@@ -90,7 +147,7 @@ export default function AdminAssetsPage() {
         <table className="w-full">
           <thead className="bg-snow-gray border-b border-fog-gray">
             <tr>
-              {["Título", "Titular", "Tipo", "Estado", "Reportes", "Publicado", "Acciones"].map((h) => (
+              {["Título / Titular", "Tipo", "Estado", "Vistas", "Solicitudes", "Publicado", "Acciones"].map((h) => (
                 <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-gray uppercase tracking-wide text-left">
                   {h}
                 </th>
@@ -98,49 +155,67 @@ export default function AdminAssetsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((asset) => (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="py-12 text-center text-sm text-slate-gray">
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-electric-blue" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Cargando activos...
+                  </div>
+                </td>
+              </tr>
+            ) : assets.map((asset) => (
               <tr key={asset.id} className="border-b border-fog-gray last:border-0 hover:bg-snow-gray transition-colors">
                 <td className="px-4 py-3">
                   <p className="text-sm font-medium text-carbon-gray">{asset.title}</p>
+                  <p className="text-xs text-slate-gray font-mono mt-0.5">{asset.ownerId.slice(0, 8)}…</p>
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-gray">{asset.owner}</td>
-                <td className="px-4 py-3 text-sm text-slate-gray">{ASSET_TYPE_LABELS[asset.assetType]}</td>
+                <td className="px-4 py-3 text-sm text-slate-gray">
+                  {ASSET_TYPE_LABELS[asset.category as AssetType] ?? asset.category}
+                </td>
                 <td className="px-4 py-3">
                   <AssetStatusBadge status={asset.status} />
                 </td>
-                <td className="px-4 py-3">
-                  {asset.reports > 0 ? (
-                    <span className="flex items-center gap-1 text-sm text-warm-amber font-semibold">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {asset.reports}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-slate-gray">—</span>
-                  )}
-                </td>
+                <td className="px-4 py-3 text-sm text-slate-gray">{asset.viewCount}</td>
+                <td className="px-4 py-3 text-sm text-slate-gray">{asset.requestCount}</td>
                 <td className="px-4 py-3 text-xs text-slate-gray">{formatRelativeTime(asset.createdAt)}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5">
                     <button
-                      onClick={() => setReviewAsset(asset)}
+                      onClick={() => { setReviewAsset(asset); setChecklist([]); setRejectReason(""); }}
                       className="p-1.5 text-slate-gray hover:text-electric-blue rounded-lg hover:bg-snow-gray transition-colors"
                       title="Revisar"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="p-1.5 text-slate-gray hover:text-deep-emerald rounded-lg hover:bg-snow-gray transition-colors" title="Aprobar">
-                      <CheckCircle className="h-4 w-4" />
-                    </button>
-                    <button className="p-1.5 text-slate-gray hover:text-soft-coral rounded-lg hover:bg-snow-gray transition-colors" title="Rechazar">
-                      <XCircle className="h-4 w-4" />
-                    </button>
+                    {asset.status !== "published" && (
+                      <button
+                        onClick={() => handlePublish(asset)}
+                        className="p-1.5 text-slate-gray hover:text-deep-emerald rounded-lg hover:bg-snow-gray transition-colors"
+                        title="Publicar"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                    {asset.status !== "archived" && (
+                      <button
+                        onClick={() => handleArchive(asset)}
+                        className="p-1.5 text-slate-gray hover:text-soft-coral rounded-lg hover:bg-snow-gray transition-colors"
+                        title="Archivar"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 && (
+        {!loading && assets.length === 0 && (
           <div className="py-12 text-center text-slate-gray text-sm">No se encontraron activos</div>
         )}
       </div>
@@ -155,60 +230,87 @@ export default function AdminAssetsPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setReviewAsset(null)}>Cancelar</Button>
-            <Button variant="ghost" icon={<AlertTriangle className="h-4 w-4" />}>Solicitar Cambios</Button>
-            <Button variant="destructive" icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>
-            <Button variant="success" icon={<CheckCircle className="h-4 w-4" />}>Aprobar</Button>
+            {reviewAsset?.status !== "archived" && (
+              <Button
+                variant="destructive"
+                icon={<XCircle className="h-4 w-4" />}
+                onClick={() => reviewAsset && handleArchive(reviewAsset)}
+                disabled={actionLoading}
+              >
+                Archivar
+              </Button>
+            )}
+            {reviewAsset?.status !== "published" && (
+              <Button
+                variant="success"
+                icon={<CheckCircle className="h-4 w-4" />}
+                onClick={() => reviewAsset && handlePublish(reviewAsset)}
+                disabled={actionLoading}
+              >
+                Publicar
+              </Button>
+            )}
           </>
         }
       >
-        <div className="space-y-6">
-          {/* Checklist */}
-          <div>
-            <p className="text-sm font-semibold text-carbon-gray mb-3">Checklist de Revisión</p>
-            <div className="space-y-2">
-              {CHECKLIST_ITEMS.map((item) => (
-                <label key={item} className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={checklist.includes(item)}
-                    onChange={(e) => {
-                      setChecklist((prev) =>
-                        e.target.checked ? [...prev, item] : prev.filter((i) => i !== item)
-                      );
-                    }}
-                    className="w-4 h-4 rounded border-fog-gray text-electric-blue"
-                  />
-                  <span className="text-sm text-carbon-gray">{item}</span>
-                </label>
-              ))}
+        {reviewAsset && (
+          <div className="space-y-6">
+            <div className="space-y-2 text-sm text-slate-gray">
+              <p><span className="font-medium text-carbon-gray">ID Activo:</span> <span className="font-mono">{reviewAsset.id}</span></p>
+              <p><span className="font-medium text-carbon-gray">ID Titular:</span> <span className="font-mono">{reviewAsset.ownerId}</span></p>
+              <p><span className="font-medium text-carbon-gray">Tipo:</span> {ASSET_TYPE_LABELS[reviewAsset.category as AssetType] ?? reviewAsset.category}</p>
+              <p><span className="font-medium text-carbon-gray">Estado actual:</span> {reviewAsset.status}</p>
+              <p><span className="font-medium text-carbon-gray">Vistas / Solicitudes:</span> {reviewAsset.viewCount} / {reviewAsset.requestCount}</p>
             </div>
-            <div className="mt-3">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="flex-1 h-1.5 bg-fog-gray rounded-full">
-                  <div
-                    className="h-1.5 bg-electric-blue rounded-full transition-all"
-                    style={{ width: `${(checklist.length / CHECKLIST_ITEMS.length) * 100}%` }}
-                  />
+
+            {/* Checklist */}
+            <div>
+              <p className="text-sm font-semibold text-carbon-gray mb-3">Checklist de Revisión</p>
+              <div className="space-y-2">
+                {CHECKLIST_ITEMS.map((item) => (
+                  <label key={item} className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checklist.includes(item)}
+                      onChange={(e) => {
+                        setChecklist((prev) =>
+                          e.target.checked ? [...prev, item] : prev.filter((i) => i !== item)
+                        );
+                      }}
+                      className="w-4 h-4 rounded border-fog-gray text-electric-blue"
+                    />
+                    <span className="text-sm text-carbon-gray">{item}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 h-1.5 bg-fog-gray rounded-full">
+                    <div
+                      className="h-1.5 bg-electric-blue rounded-full transition-all"
+                      style={{ width: `${(checklist.length / CHECKLIST_ITEMS.length) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-gray">{checklist.length}/{CHECKLIST_ITEMS.length}</span>
                 </div>
-                <span className="text-xs text-slate-gray">{checklist.length}/{CHECKLIST_ITEMS.length}</span>
               </div>
             </div>
-          </div>
 
-          {/* Notes */}
-          <div>
-            <label className="text-sm font-medium text-carbon-gray block mb-2">
-              Notas del moderador
-            </label>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Agregá observaciones o motivo de rechazo..."
-              rows={3}
-              className="w-full px-4 py-3 border border-fog-gray rounded-xl text-sm focus:outline-none focus:border-electric-blue resize-none transition-colors"
-            />
+            {/* Notes */}
+            <div>
+              <label className="text-sm font-medium text-carbon-gray block mb-2">
+                Notas del moderador
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Agregá observaciones o motivo de rechazo..."
+                rows={3}
+                className="w-full px-4 py-3 border border-fog-gray rounded-xl text-sm focus:outline-none focus:border-electric-blue resize-none transition-colors"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
     </div>
   );

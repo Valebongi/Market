@@ -147,4 +147,26 @@ export class UsersService {
       data: { deletedAt: new Date() },
     });
   }
+
+  async getSavedAssets(userId: string) {
+    const saved = await this.prisma.savedAsset.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { assetId: true },
+    });
+    return { data: saved.map((s) => s.assetId), total: saved.length };
+  }
+
+  async saveAsset(userId: string, assetId: string) {
+    return this.prisma.savedAsset.upsert({
+      where: { userId_assetId: { userId, assetId } },
+      create: { userId, assetId },
+      update: {},
+    });
+  }
+
+  async unsaveAsset(userId: string, assetId: string) {
+    await this.prisma.savedAsset.deleteMany({ where: { userId, assetId } });
+    return { message: 'Asset removed from saved' };
+  }
 }

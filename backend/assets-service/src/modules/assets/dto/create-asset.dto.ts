@@ -67,4 +67,8 @@ export class CreateAssetDto {
   @IsOptional()
   @IsArray()
   links?: { label: string; url: string; isMain?: boolean }[];
+
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string;
 }

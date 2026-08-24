@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, type AuthUser } from "./api";
+import { authService as authApi } from "@/services/auth.service";
+import type { AuthUser } from "@/types";
 
 interface AuthState {
   user: AuthUser | null;
@@ -14,6 +15,7 @@ interface AuthContextValue extends AuthState {
   login: (email: string, password: string, returnTo?: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; role: string }, returnTo?: string) => Promise<void>;
   loginWithOAuth: (provider: string, providerId: string, email: string, name: string, returnTo?: string) => Promise<void>;
+  setSession: (token: string, user: AuthUser, returnTo?: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -67,6 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push(returnTo || "/dashboard");
   }, [persist, router]);
 
+  const setSession = useCallback((token: string, user: AuthUser, returnTo?: string) => {
+    persist(token, user);
+    router.replace(returnTo || "/dashboard");
+  }, [persist, router]);
+
   const logout = useCallback(() => {
     localStorage.removeItem("davinci_token");
     localStorage.removeItem("davinci_user");
@@ -74,17 +81,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }, [router]);
 
+  const value = useMemo(
+    () => ({ ...state, login, register, loginWithOAuth, setSession, logout, isAuthenticated: !!state.token }),
+    [state, login, register, loginWithOAuth, setSession, logout]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        ...state,
-        login,
-        register,
-        loginWithOAuth,
-        logout,
-        isAuthenticated: !!state.token,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

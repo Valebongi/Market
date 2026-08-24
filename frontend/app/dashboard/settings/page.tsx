@@ -7,7 +7,7 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { usersApi } from "@/lib/api";
+import { usersService as usersApi } from "@/services/users.service";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "Perfil Público", icon: <User className="h-4 w-4" /> },
@@ -84,14 +84,15 @@ export default function SettingsPage() {
     setLoadingProfile(true);
     usersApi.getProfile(user.id)
       .then((data) => {
+        const d = data as unknown as Record<string, string>;
         setProfile({
-          displayName: data.displayName || user.profile?.displayName || "",
-          bio: data.bio || "",
-          website: data.website || "",
-          linkedin: data.linkedinUrl || "",
-          twitter: data.twitterUrl || "",
-          github: data.githubUrl || "",
-          location: data.location || "",
+          displayName: d.displayName || user.profile?.displayName || "",
+          bio: d.bio || "",
+          website: d.website || "",
+          linkedin: d.linkedin || "",
+          twitter: d.twitter || "",
+          github: d.github || "",
+          location: d.location || "",
         });
         if (data.notificationSettings) {
           setNotifications({
@@ -121,9 +122,9 @@ export default function SettingsPage() {
         displayName: profile.displayName,
         bio: profile.bio || undefined,
         website: profile.website || undefined,
-        linkedinUrl: profile.linkedin || undefined,
-        twitterUrl: profile.twitter || undefined,
-        githubUrl: profile.github || undefined,
+        linkedin: profile.linkedin || undefined,
+        twitter: profile.twitter || undefined,
+        github: profile.github || undefined,
         location: profile.location || undefined,
       });
       setSaved(true);
@@ -146,16 +147,37 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-standard mx-auto">
+    <div className="p-4 sm:p-8 max-w-standard mx-auto">
       {/* Header */}
-      <div className="pb-8 border-b border-fog-gray">
-        <h1 className="text-3xl font-bold text-carbon-gray">Configuración</h1>
-        <p className="text-base text-slate-gray mt-1">Gestioná tu cuenta y preferencias</p>
+      <div className="pb-6 sm:pb-8 border-b border-fog-gray">
+        <h1 className="text-2xl sm:text-3xl font-bold text-carbon-gray">Configuración</h1>
+        <p className="text-sm sm:text-base text-slate-gray mt-1">Gestioná tu cuenta y preferencias</p>
       </div>
 
-      <div className="mt-8 flex gap-8">
-        {/* Sidebar */}
-        <nav className="w-56 shrink-0">
+      {/* Mobile: horizontal tab scroll | Desktop: vertical sidebar nav */}
+      <div className="sm:hidden mt-4 -mx-4 px-4 border-b border-fog-gray overflow-x-auto">
+        <div className="flex gap-1 w-max pb-0">
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors",
+                activeTab === tab.id
+                  ? "border-electric-blue text-electric-blue"
+                  : "border-transparent text-slate-gray hover:text-carbon-gray"
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6 sm:mt-8 flex gap-8">
+        {/* Desktop: vertical sidebar nav */}
+        <nav className="hidden sm:block w-56 shrink-0">
           <ul className="space-y-1">
             {SETTINGS_TABS.map((tab) => (
               <li key={tab.id}>
@@ -225,7 +247,7 @@ export default function SettingsPage() {
                   placeholder="https://tu-sitio.com"
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="LinkedIn"
                     value={profile.linkedin}
@@ -276,7 +298,7 @@ export default function SettingsPage() {
                   </div>
                   <Button variant="secondary" size="sm">Cambiar email</Button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-carbon-gray block mb-2">Idioma</label>
                     <select className="w-full h-10 px-4 border border-fog-gray rounded-lg text-sm bg-white text-carbon-gray focus:outline-none focus:border-electric-blue">

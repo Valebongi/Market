@@ -108,4 +108,26 @@ export class UsersController {
   softDelete(@Param('userId') userId: string) {
     return this.usersService.softDelete(userId);
   }
+
+  @Get(':userId/saved')
+  getSavedAssets(@Param('userId') userId: string) {
+    return this.usersService.getSavedAssets(userId);
+  }
+
+  @Post(':userId/saved/:assetId')
+  @HttpCode(HttpStatus.CREATED)
+  saveAsset(
+    @Param('userId') userId: string,
+    @Param('assetId') assetId: string,
+  ) {
+    return this.usersService.saveAsset(userId, assetId);
+  }
+
+  @Delete(':userId/saved/:assetId')
+  unsaveAsset(
+    @Param('userId') userId: string,
+    @Param('assetId') assetId: string,
+  ) {
+    return this.usersService.unsaveAsset(userId, assetId);
+  }
 }

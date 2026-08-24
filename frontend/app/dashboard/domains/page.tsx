@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Search, Globe, ExternalLink, Clock, AlertCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { domainsApi } from "@/lib/api";
+import { domainsService as domainsApi } from "@/services/domains.service";
 
 interface DomainResult {
   domain: string;
@@ -81,17 +81,17 @@ export default function DomainsPage() {
   };
 
   return (
-    <div className="p-8 max-w-standard mx-auto">
+    <div className="p-4 sm:p-8 max-w-standard mx-auto">
       {/* Header */}
-      <div className="pb-8 border-b border-fog-gray">
-        <h1 className="text-3xl font-bold text-carbon-gray">Buscar Dominios</h1>
-        <p className="text-base text-slate-gray mt-1">
+      <div className="pb-6 sm:pb-8 border-b border-fog-gray">
+        <h1 className="text-2xl sm:text-3xl font-bold text-carbon-gray">Buscar Dominios</h1>
+        <p className="text-sm sm:text-base text-slate-gray mt-1">
           Encontrá el dominio perfecto para tu proyecto
         </p>
       </div>
 
       {/* Hero Search */}
-      <div className="py-10">
+      <div className="py-6 sm:py-10">
         <div className="max-w-xl mx-auto">
           <div className="flex items-center border-2 border-fog-gray rounded-2xl overflow-hidden focus-within:border-electric-blue focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.1)] transition-all bg-white h-14">
             <Search className="ml-4 h-5 w-5 text-slate-gray shrink-0" />
@@ -156,12 +156,12 @@ export default function DomainsPage() {
           {results.map((result) => (
             <div
               key={result.domain}
-              className="flex items-center justify-between bg-white border border-fog-gray rounded-xl px-5 py-4 hover:shadow-subtle transition-all"
+              className="flex items-center justify-between bg-white border border-fog-gray rounded-xl px-4 sm:px-5 py-3 sm:py-4 hover:shadow-subtle transition-all gap-3"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                 <Globe className={cn("h-5 w-5 shrink-0", result.available ? "text-deep-emerald" : "text-slate-gray")} />
-                <div>
-                  <p className="font-mono font-semibold text-carbon-gray">{result.domain}</p>
+                <div className="min-w-0">
+                  <p className="font-mono font-semibold text-carbon-gray truncate">{result.domain}</p>
                   {result.price && <p className="text-xs text-slate-gray mt-0.5">{result.price}</p>}
                 </div>
                 <span

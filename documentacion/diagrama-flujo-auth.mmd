@@ -1,0 +1,67 @@
+sequenceDiagram
+    actor U as Usuario
+    participant FE as Next.js :3000
+    participant GW as Gateway :8080
+    participant AS as auth-service :3001
+    participant US as users-service :3003
+
+    rect rgb(219, 234, 254)
+        note over U,US: REGISTRO
+        U->>FE: Completa formulario
+        FE->>GW: POST /api/v1/auth/register
+        GW->>AS: POST /auth/register (sin JWT)
+        AS->>AS: Hash password (bcrypt x12)
+        AS->>AS: Crear User + UserProfile en davinci_auth
+        AS-->>US: POST /users/profiles (fire & forget)
+        US->>US: Crear UserProfile + NotificationSettings en davinci_users
+        AS->>AS: Generar JWT {sub, email, role}
+        AS-->>GW: {accessToken, user}
+        GW-->>FE: {accessToken, user}
+        FE->>FE: Guardar en localStorage
+        FE-->>U: Redirige a /dashboard
+    end
+
+    rect rgb(220, 252, 231)
+        note over U,US: LOGIN
+        U->>FE: Email + Password
+        FE->>GW: POST /api/v1/auth/login
+        GW->>AS: POST /auth/login
+        AS->>AS: Verificar hash bcrypt
+        AS->>AS: Generar JWT
+        AS-->>GW: {accessToken, user}
+        GW-->>FE: {accessToken, user}
+        FE->>FE: Guardar en localStorage
+        FE-->>U: Redirige a /dashboard
+    end
+
+    rect rgb(255, 237, 213)
+        note over U,AS: RECUPERACIÓN DE CONTRASEÑA
+        U->>FE: Ingresa email
+        FE->>GW: POST /api/v1/auth/forgot-password
+        GW->>AS: POST /auth/forgot-password
+        AS->>AS: Buscar usuario por email
+        AS->>AS: Generar token (32 bytes random)
+        AS->>AS: Guardar token + expiry (1h) en DB
+        AS-->>GW: {message, devToken}
+        GW-->>FE: {message}
+        FE-->>U: "Revisá tu correo"
+        U->>FE: Abre /reset-password?token=...
+        U->>FE: Nueva contraseña
+        FE->>GW: POST /api/v1/auth/reset-password
+        GW->>AS: POST /auth/reset-password
+        AS->>AS: Verificar token y expiración
+        AS->>AS: Hash nueva contraseña
+        AS->>AS: Limpiar token + expiry
+        AS-->>GW: {message}
+        GW-->>FE: {message}
+        FE-->>U: "Contraseña actualizada"
+    end
+
+    rect rgb(245, 243, 255)
+        note over U,GW: REQUEST AUTENTICADO (post-login)
+        U->>FE: Navega al dashboard
+        FE->>GW: GET /api/v1/assets (Bearer JWT)
+        GW->>GW: Verificar firma JWT
+        GW->>GW: Inyectar x-user-id, x-user-email, x-user-role
+        GW-->>FE: 200 {data, total, ...}
+    end

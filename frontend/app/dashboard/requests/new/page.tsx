@@ -6,7 +6,7 @@ import Link from "next/link";
 import { MessageSquare, ArrowLeft } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
-import { requestsApi } from "@/lib/api";
+import { requestsService as requestsApi } from "@/services/requests.service";
 import { useAuth } from "@/lib/auth-context";
 
 function NewRequestForm() {

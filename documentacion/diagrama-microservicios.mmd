@@ -1,0 +1,65 @@
+graph TB
+    subgraph CLIENTE["🌐 CLIENTE"]
+        FE["Next.js 15\nFrontend\n:3000"]
+    end
+
+    subgraph GATEWAY["🔀 API GATEWAY :8080"]
+        GW["Gateway\n• Validación JWT\n• Proxy HTTP\n• Rate Limiting\n• Inyección de headers"]
+    end
+
+    subgraph SERVICIOS["⚙️ MICROSERVICIOS"]
+        AUTH["🔐 auth-service\n:3001\ndb: davinci_auth\n\nRegistro, Login\nJWT, OAuth\nReset Password"]
+        ASSETS["📦 assets-service\n:3002\ndb: davinci_assets\n\nCRUD Activos\nUpload Imágenes\nFiltros y búsqueda"]
+        USERS["👤 users-service\n:3003\ndb: davinci_users\n\nPerfiles\nWishlist\nNotif. Settings"]
+        MSG["💬 messaging-service\n:3004\ndb: davinci_messaging\n\nSolicitudes\nMensajes\nNotificaciones"]
+        DOM["🏷️ domains-service\n:3005\ndb: davinci_domains\n\nDominios y\nCategorías"]
+        ADMIN["🛡️ admin-service\n:3006\ndb: davinci_admin\n\nMétricas\nSnapshots\nModeración"]
+    end
+
+    subgraph DBS["🗄️ BASES DE DATOS (PostgreSQL 18)"]
+        DB1[("davinci_auth")]
+        DB2[("davinci_assets")]
+        DB3[("davinci_users")]
+        DB4[("davinci_messaging")]
+        DB5[("davinci_domains")]
+        DB6[("davinci_admin")]
+    end
+
+    FE -->|"HTTP :8080/api/v1/*\nBearer JWT"| GW
+
+    GW -->|"/auth/*"| AUTH
+    GW -->|"/assets/*"| ASSETS
+    GW -->|"/users/*"| USERS
+    GW -->|"/requests/*"| MSG
+    GW -->|"/domains/*"| DOM
+    GW -->|"/admin/*"| ADMIN
+
+    AUTH -.->|"POST /users/profiles\n(fire & forget)"| USERS
+    MSG -.->|"PATCH /request-count\n(fire & forget)"| ASSETS
+    ASSETS -.->|"PATCH /asset-count\n(fire & forget)"| USERS
+
+    AUTH --- DB1
+    ASSETS --- DB2
+    USERS --- DB3
+    MSG --- DB4
+    DOM --- DB5
+    ADMIN --- DB6
+
+    style CLIENTE fill:#EFF6FF,stroke:#2563EB,color:#1e3a5f
+    style GATEWAY fill:#F0FDF4,stroke:#059669,color:#14532d
+    style SERVICIOS fill:#FFF7ED,stroke:#D97706,color:#78350f
+    style DBS fill:#F5F3FF,stroke:#7C3AED,color:#3b0764
+    style FE fill:#DBEAFE,stroke:#2563EB,color:#1e40af
+    style GW fill:#D1FAE5,stroke:#059669,color:#065f46
+    style AUTH fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style ASSETS fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style USERS fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style MSG fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style DOM fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style ADMIN fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style DB1 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95
+    style DB2 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95
+    style DB3 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95
+    style DB4 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95
+    style DB5 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95
+    style DB6 fill:#EDE9FE,stroke:#7C3AED,color:#4c1d95

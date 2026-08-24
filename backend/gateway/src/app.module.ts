@@ -16,12 +16,13 @@ import { AuthMiddleware } from './common/auth.middleware';
         signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
       }),
     }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 minute
-        limit: 100,  // 100 requests per minute
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ([{
+        ttl: config.get<number>('RATE_LIMIT_TTL', 60000),
+        limit: config.get<number>('RATE_LIMIT_MAX', 100),
+      }]),
+    }),
     ProxyModule,
   ],
 })
@@ -39,6 +40,8 @@ export class AppModule implements NestModule {
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/oauth/callback', method: RequestMethod.POST },
+        { path: 'auth/forgot-password', method: RequestMethod.POST },
+        { path: 'auth/reset-password', method: RequestMethod.POST },
         // Public user profiles (any visitor can view a user's public profile)
         { path: 'users/:userId', method: RequestMethod.GET },
       )

@@ -1,9 +1,18 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Security headers
+  app.use(helmet());
+
+  // Health check — outside global prefix so load balancers can reach it
+  app.getHttpAdapter().get('/health', (_req: unknown, res: any) => {
+    res.json({ status: 'ok', service: 'gateway', timestamp: new Date().toISOString() });
+  });
 
   app.setGlobalPrefix('api/v1');
 

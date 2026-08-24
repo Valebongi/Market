@@ -45,6 +45,19 @@ export class MessagingController {
     return this.messagingService.getUnreadCount(userId);
   }
 
+  @Get('notifications')
+  getNotifications(
+    @Headers('x-user-id') userId: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.messagingService.getNotifications(userId, limit);
+  }
+
+  @Patch('notifications/read-all')
+  markNotificationsRead(@Headers('x-user-id') userId: string) {
+    return this.messagingService.markNotificationsRead(userId);
+  }
+
   @Get('mine')
   findMyRequests(
     @Headers('x-user-id') userId: string,

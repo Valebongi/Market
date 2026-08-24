@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import OAuthButtons from "@/components/auth/OAuthButtons";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/http";
 
 
 function LoginForm() {
   const { login } = useAuth();
-  const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || undefined;
+  const [returnTo, setReturnTo] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setReturnTo(params.get("returnTo") || undefined);
+  }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -137,9 +140,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
-  );
+  return <LoginForm />;
 }

@@ -64,14 +64,20 @@ export default function Navbar() {
 
         {/* Auth Buttons (Desktop) */}
         <div className="hidden md:flex items-center gap-3">
-          {loading ? (
-            <div className="w-24 h-9 bg-fog-gray dark:bg-gray-800 rounded-lg animate-pulse" />
-          ) : isAuthenticated ? (
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <Avatar name={displayName} size="sm" />
-              <Button variant="ghost" size="sm" icon={<LayoutDashboard className="h-4 w-4" />}>
-                Mi Dashboard
-              </Button>
+          {!loading && isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2.5 pl-1 pr-3 py-1.5 rounded-xl border border-fog-gray dark:border-white/10 hover:border-blue-200 dark:hover:border-blue-800 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all group"
+            >
+              <Avatar name={displayName} src={user?.profile?.avatarUrl} size="sm" />
+              <div className="leading-tight">
+                <p className="text-xs font-semibold text-carbon-gray dark:text-gray-100 leading-none group-hover:text-electric-blue transition-colors">
+                  {displayName}
+                </p>
+                <p className="text-[10px] text-slate-gray dark:text-gray-500 mt-0.5 flex items-center gap-1">
+                  <LayoutDashboard className="h-2.5 w-2.5" /> Mi cuenta
+                </p>
+              </div>
             </Link>
           ) : (
             <>

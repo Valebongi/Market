@@ -65,6 +65,10 @@ export class ProxyController {
   }
 
   private async forward(serviceName: string, req: Request, res: Response) {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.startsWith('multipart/form-data')) {
+      return this.proxyService.forwardMultipart(serviceName, req, res);
+    }
     const { status, data } = await this.proxyService.forwardRequest(serviceName, req);
     res.status(status).json(data);
   }

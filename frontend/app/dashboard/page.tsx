@@ -5,7 +5,8 @@ import { Package, MessageSquare, Eye, TrendingUp, Plus, Search, Globe, Clock } f
 import Link from "next/link";
 import { StatCard } from "@/components/ui/Card";
 import { useAuth } from "@/lib/auth-context";
-import { assetsApi, requestsApi } from "@/lib/api";
+import { assetsService as assetsApi } from "@/services/assets.service";
+import { requestsService as requestsApi } from "@/services/requests.service";
 import { formatRelativeTime } from "@/lib/utils";
 
 interface ActivityItem {
@@ -17,8 +18,8 @@ interface ActivityItem {
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xl font-semibold text-carbon-gray dark:text-gray-100 flex items-center gap-2.5">
-      <span className="w-0.5 h-5 bg-electric-blue rounded-full inline-block shrink-0" />
+    <h2 className="text-lg font-bold text-carbon-gray dark:text-gray-100 flex items-center gap-2.5">
+      <span className="w-1 h-5 rounded-full bg-gradient-to-b from-electric-blue to-violet-500 inline-block shrink-0" />
       {children}
     </h2>
   );
@@ -94,28 +95,40 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-8 max-w-wide mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex items-start justify-between pb-8 border-b border-fog-gray dark:border-white/10">
-        <div>
-          <h1 className="text-3xl font-bold text-carbon-gray dark:text-gray-100 font-display">
-            Hola, {displayName.split(" ")[0]} 👋
-          </h1>
-          <p className="text-base text-slate-gray dark:text-gray-400 mt-1">Bienvenido/a a tu dashboard</p>
+    <div className="min-h-full market-grid-bg">
+    <div className="p-4 sm:p-8 max-w-wide mx-auto animate-fade-in">
+      {/* Header — matches landing hero style */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-electric-blue via-blue-600 to-violet-600 p-5 sm:p-7 mb-6 sm:mb-8 shadow-lg">
+        <div className="absolute inset-0 dot-pattern opacity-10" />
+        <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 mb-3">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+              </span>
+              <span className="text-[11px] font-semibold text-white/90 tracking-wide">Panel activo</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white font-display leading-tight">
+              Hola, {displayName.split(" ")[0]} 👋
+            </h1>
+            <p className="text-sm text-white/70 mt-1">Bienvenido/a a tu panel de control</p>
+          </div>
+          <p className="text-xs text-white/60 capitalize hidden sm:block shrink-0 mt-1">{today}</p>
         </div>
-        <p className="text-sm text-slate-gray dark:text-gray-500 capitalize hidden sm:block">{today}</p>
       </div>
 
       {/* Stats Grid */}
-      <section className="mt-8">
+      <section className="mt-6 sm:mt-8 bg-white dark:bg-gray-900/60 rounded-2xl p-4 sm:p-6 border border-blue-100 dark:border-white/10 shadow-sm">
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-6">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-28 bg-fog-gray rounded-xl animate-pulse" />
+              <div key={i} className="h-24 sm:h-28 bg-fog-gray rounded-xl animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-6">
             <StatCard
               icon={<Package className="h-5 w-5" />}
               value={formatStat(stats.assetsPublished)}
@@ -154,80 +167,62 @@ export default function DashboardPage() {
       </section>
 
       {/* Quick Actions */}
-      <section className="mt-12">
-        <div className="flex items-center justify-between mb-6">
+      <section className="mt-6 sm:mt-8">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <SectionHeading>Acciones Rápidas</SectionHeading>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Link href="/dashboard/assets/new">
-            <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl p-6 flex items-start gap-4 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-subtle transition-all group cursor-pointer">
-              <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/50 rounded-lg flex items-center justify-center text-electric-blue group-hover:bg-electric-blue group-hover:text-white transition-all shrink-0">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100/60 dark:from-blue-950/40 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-800/50 rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4 hover:border-electric-blue hover:shadow-[0_4px_20px_rgba(37,99,235,0.15)] transition-all group cursor-pointer">
+              <div className="w-11 h-11 bg-electric-blue rounded-xl flex items-center justify-center text-white shadow-md shrink-0 group-hover:scale-110 transition-transform">
                 <Plus className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-semibold text-carbon-gray dark:text-gray-100 group-hover:text-electric-blue dark:group-hover:text-blue-400 transition-colors">
-                  Publicar Nuevo Activo
-                </p>
-                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">
-                  Comenzá a monetizar tu próxima creación
-                </p>
+                <p className="font-bold text-midnight-blue dark:text-gray-100">Publicar Nuevo Activo</p>
+                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">Comenzá a monetizar tu próxima creación</p>
               </div>
             </div>
           </Link>
 
           <Link href="/dashboard/requests">
-            <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl p-6 flex items-start gap-4 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-subtle transition-all group cursor-pointer">
-              <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/50 rounded-lg flex items-center justify-center text-soft-indigo group-hover:bg-soft-indigo group-hover:text-white transition-all shrink-0">
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/60 dark:from-indigo-950/40 dark:to-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4 hover:border-soft-indigo hover:shadow-[0_4px_20px_rgba(79,70,229,0.15)] transition-all group cursor-pointer">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 bg-soft-indigo rounded-xl flex items-center justify-center text-white shadow-md shrink-0 group-hover:scale-110 transition-transform">
                 <MessageSquare className="h-5 w-5" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-carbon-gray dark:text-gray-100 group-hover:text-electric-blue dark:group-hover:text-blue-400 transition-colors">
-                    Revisar Solicitudes
-                  </p>
+                  <p className="font-bold text-midnight-blue dark:text-gray-100">Revisar Solicitudes</p>
                   {pendingCount > 0 && (
-                    <span className="bg-electric-blue text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {pendingCount}
-                    </span>
+                    <span className="bg-electric-blue text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingCount}</span>
                   )}
                 </div>
                 <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">
-                  {pendingCount > 0
-                    ? `Tenés ${pendingCount} solicitud${pendingCount > 1 ? "es" : ""} pendiente${pendingCount > 1 ? "s" : ""} de revisión`
-                    : "Revisá el estado de tus conversaciones"}
+                  {pendingCount > 0 ? `${pendingCount} pendiente${pendingCount > 1 ? "s" : ""} de revisión` : "Revisá el estado de tus conversaciones"}
                 </p>
               </div>
             </div>
           </Link>
 
-          <Link href="/assets">
-            <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl p-6 flex items-start gap-4 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-subtle transition-all group cursor-pointer">
-              <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-950/50 rounded-lg flex items-center justify-center text-deep-emerald group-hover:bg-deep-emerald group-hover:text-white transition-all shrink-0">
+          <Link href="/dashboard/explore">
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/60 dark:from-emerald-950/40 dark:to-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800/50 rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4 hover:border-deep-emerald hover:shadow-[0_4px_20px_rgba(5,150,105,0.15)] transition-all group cursor-pointer">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 bg-deep-emerald rounded-xl flex items-center justify-center text-white shadow-md shrink-0 group-hover:scale-110 transition-transform">
                 <Search className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-semibold text-carbon-gray dark:text-gray-100 group-hover:text-electric-blue dark:group-hover:text-blue-400 transition-colors">
-                  Explorar Marketplace
-                </p>
-                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">
-                  Descubrí activos disponibles en la plataforma
-                </p>
+                <p className="font-bold text-midnight-blue dark:text-gray-100">Explorar Marketplace</p>
+                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">Descubrí activos disponibles en la plataforma</p>
               </div>
             </div>
           </Link>
 
           <Link href="/dashboard/domains">
-            <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl p-6 flex items-start gap-4 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-subtle transition-all group cursor-pointer">
-              <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/50 rounded-lg flex items-center justify-center text-warm-amber group-hover:bg-warm-amber group-hover:text-white transition-all shrink-0">
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/40 dark:to-amber-900/20 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4 hover:border-warm-amber hover:shadow-[0_4px_20px_rgba(245,158,11,0.15)] transition-all group cursor-pointer">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 bg-warm-amber rounded-xl flex items-center justify-center text-white shadow-md shrink-0 group-hover:scale-110 transition-transform">
                 <Globe className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-semibold text-carbon-gray dark:text-gray-100 group-hover:text-electric-blue dark:group-hover:text-blue-400 transition-colors">
-                  Buscar Dominio
-                </p>
-                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">
-                  Encontrá el dominio perfecto para tu proyecto
-                </p>
+                <p className="font-bold text-midnight-blue dark:text-gray-100">Buscar Dominio</p>
+                <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">Encontrá el dominio perfecto para tu proyecto</p>
               </div>
             </div>
           </Link>
@@ -235,8 +230,8 @@ export default function DashboardPage() {
       </section>
 
       {/* Actividad Reciente */}
-      <section className="mt-12 pb-8">
-        <div className="flex items-center justify-between mb-6">
+      <section className="mt-6 sm:mt-8 pb-8">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <SectionHeading>Actividad Reciente</SectionHeading>
           <Link href="/dashboard/requests" className="text-sm text-electric-blue hover:underline">
             Ver todo el historial
@@ -281,6 +276,7 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+    </div>
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface OAuthButtonsProps {
 export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsProps) {
   const { loginWithOAuth } = useAuth();
   const [error, setError] = useState("");
+  const [loadingProvider, setLoadingProvider] = useState<"github" | "google" | null>(null);
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
@@ -45,22 +46,24 @@ export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsP
       return;
     }
     setError("");
+    setLoadingProvider("google");
     window.google.accounts.id.initialize({
       client_id: googleClientId,
       callback: async (response: { credential: string }) => {
         try {
-          // Decode the Google JWT payload (base64url → JSON)
           const [, b64] = response.credential.split(".");
           const payload = JSON.parse(atob(b64.replace(/-/g, "+").replace(/_/g, "/")));
           await loginWithOAuth("google", payload.sub, payload.email, payload.name || payload.email, returnTo);
         } catch (err: any) {
           setError(err.message || "Error al iniciar sesión con Google");
+          setLoadingProvider(null);
         }
       },
     });
     window.google.accounts.id.prompt((notification) => {
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
         setError("No se pudo abrir el popup de Google. Verificá que las cookies de terceros no estén bloqueadas.");
+        setLoadingProvider(null);
       }
     });
   };
@@ -71,6 +74,7 @@ export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsP
       return;
     }
     setError("");
+    setLoadingProvider("github");
     const params = new URLSearchParams({ client_id: githubClientId, scope: "user:email" });
     if (returnTo) params.set("state", encodeURIComponent(returnTo));
     window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`;
@@ -85,19 +89,29 @@ export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsP
       <button
         type="button"
         onClick={handleGoogleLogin}
-        className="w-full flex items-center justify-center gap-3 h-11 border border-fog-gray rounded-lg text-sm font-medium text-carbon-gray hover:bg-snow-gray transition-colors"
+        disabled={loadingProvider !== null}
+        className="w-full flex items-center justify-center gap-3 h-11 border border-fog-gray rounded-lg text-sm font-medium text-carbon-gray hover:bg-snow-gray transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        <Chrome className="h-4 w-4 text-blue-500" />
-        {actionLabel} con Google
+        {loadingProvider === "google" ? (
+          <span className="h-4 w-4 border-2 border-carbon-gray border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <Chrome className="h-4 w-4 text-blue-500" />
+        )}
+        {loadingProvider === "google" ? "Conectando..." : `${actionLabel} con Google`}
       </button>
 
       <button
         type="button"
         onClick={handleGithubLogin}
-        className="w-full flex items-center justify-center gap-3 h-11 border border-fog-gray rounded-lg text-sm font-medium text-carbon-gray hover:bg-snow-gray transition-colors"
+        disabled={loadingProvider !== null}
+        className="w-full flex items-center justify-center gap-3 h-11 border border-fog-gray rounded-lg text-sm font-medium text-carbon-gray hover:bg-snow-gray transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        <Github className="h-4 w-4" />
-        {actionLabel} con GitHub
+        {loadingProvider === "github" ? (
+          <span className="h-4 w-4 border-2 border-carbon-gray border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <Github className="h-4 w-4" />
+        )}
+        {loadingProvider === "github" ? "Redirigiendo a GitHub..." : `${actionLabel} con GitHub`}
       </button>
 
       {error && (

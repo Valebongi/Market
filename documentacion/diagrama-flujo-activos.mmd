@@ -1,0 +1,107 @@
+sequenceDiagram
+    actor V as Vendedor
+    actor C as Comprador
+    participant FE as Next.js :3000
+    participant GW as Gateway :8080
+    participant ASSvc as assets-service :3002
+    participant US as users-service :3003
+    participant MS as messaging-service :3004
+
+    rect rgb(219, 234, 254)
+        note over V,US: CREAR Y PUBLICAR ACTIVO
+        V->>FE: Completa formulario /dashboard/assets/new
+        FE->>GW: POST /api/v1/assets (Bearer JWT)
+        GW->>ASSvc: POST /assets {title, category, pricing, ...}
+        ASSvc->>ASSvc: Generar slug único
+        ASSvc->>ASSvc: Crear Asset (status: draft)
+        ASSvc->>ASSvc: Crear AssetTags + AssetLinks
+        ASSvc-->>GW: {asset, status: draft}
+        GW-->>FE: {asset}
+        FE-->>V: Redirige a /dashboard/assets/:id/edit
+
+        V->>FE: Sube imagen de portada
+        FE->>GW: POST /api/v1/assets/upload-image (multipart)
+        GW->>ASSvc: pipe stream directo (forwardMultipart)
+        ASSvc->>ASSvc: multer guarda en /public/uploads/
+        ASSvc-->>GW: {url: "http://localhost:3002/uploads/..."}
+        GW-->>FE: {url}
+        FE-->>V: Preview de imagen
+
+        V->>FE: Click "Publicar"
+        FE->>GW: PATCH /api/v1/assets/:id/publish
+        GW->>ASSvc: PATCH /assets/:id/publish
+        ASSvc->>ASSvc: status = published
+        ASSvc-->>US: PATCH /users/:id/asset-count (fire & forget)
+        US->>US: increment assetCount
+        ASSvc-->>GW: {asset, status: published}
+        GW-->>FE: {asset}
+        FE-->>V: Activo visible en marketplace
+    end
+
+    rect rgb(220, 252, 231)
+        note over C,MS: SOLICITUD DE LICENCIA
+        C->>FE: Ve activo en /assets/:id
+        FE->>GW: GET /api/v1/assets/:id
+        GW->>ASSvc: GET /assets/:id
+        ASSvc->>ASSvc: increment viewCount
+        ASSvc-->>GW: {asset}
+        GW-->>FE: {asset}
+        FE-->>C: Detalle del activo + botón "Solicitar"
+
+        C->>FE: Click "Solicitar licencia"
+        FE->>GW: POST /api/v1/requests {assetId, proposedPrice, message}
+        GW->>MS: POST /requests
+        MS->>MS: Crear LicenseRequest (status: pending)
+        MS-->>ASSvc: PATCH /assets/:id/request-count (fire & forget)
+        ASSvc->>ASSvc: increment requestCount
+        MS->>MS: Crear Notification para vendedor (new_request)
+        MS-->>GW: {request}
+        GW-->>FE: {request}
+        FE-->>C: "Solicitud enviada"
+    end
+
+    rect rgb(255, 237, 213)
+        note over V,C: NEGOCIACIÓN Y CIERRE
+        V->>FE: Ve notificación (polling 30s)
+        FE->>GW: GET /api/v1/requests/notifications
+        GW->>MS: GET /requests/notifications
+        MS-->>GW: [{type: new_request, ...}]
+        GW-->>FE: notificaciones
+
+        V->>FE: Abre solicitud, envía mensaje
+        FE->>GW: POST /api/v1/requests/:id/messages {content}
+        GW->>MS: POST /requests/:id/messages
+        MS->>MS: Crear Message
+        MS->>MS: Crear Notification para comprador (new_message)
+        MS-->>GW: {message}
+        GW-->>FE: {message}
+
+        V->>FE: Acepta solicitud
+        FE->>GW: PATCH /api/v1/requests/:id/status {status: accepted}
+        GW->>MS: PATCH /requests/:id/status
+        MS->>MS: status = accepted
+        MS->>MS: Crear Notification para comprador (request_accepted)
+        MS-->>GW: {request}
+        GW-->>FE: {request}
+        FE-->>V: Solicitud aceptada
+        FE-->>C: Notificación de aceptación
+    end
+
+    rect rgb(245, 243, 255)
+        note over V,ASSvc: CICLO DE VIDA DEL ACTIVO
+        note right of ASSvc: draft → published → archived
+        V->>FE: Edita activo existente
+        FE->>GW: PUT /api/v1/assets/:id
+        GW->>ASSvc: PUT /assets/:id
+        ASSvc->>ASSvc: Actualizar campos + tags + links
+        ASSvc-->>GW: {asset}
+        GW-->>FE: {asset}
+
+        V->>FE: Archiva activo
+        FE->>GW: PATCH /api/v1/assets/:id/archive
+        GW->>ASSvc: PATCH /assets/:id/archive
+        ASSvc->>ASSvc: status = archived
+        ASSvc-->>GW: {asset, status: archived}
+        GW-->>FE: {asset}
+        FE-->>V: Activo archivado (fuera del marketplace)
+    end

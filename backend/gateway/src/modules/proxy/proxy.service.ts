@@ -1,6 +1,8 @@
 import { Injectable, BadGatewayException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Request } from 'express';
+import { Request, Response } from 'express';
+import * as http from 'http';
+import * as https from 'https';
 
 interface ServiceConfig {
   baseUrl: string;
@@ -73,5 +75,50 @@ export class ProxyService {
     } catch (err) {
       throw new BadGatewayException(`Service ${serviceName} is unavailable`);
     }
+  }
+
+  /**
+   * Forward multipart/form-data requests by piping the raw stream directly.
+   * This avoids JSON serialization which would strip the file data.
+   */
+  forwardMultipart(
+    serviceName: string,
+    req: Request,
+    res: Response,
+  ): void {
+    const url = this.getTargetUrl(serviceName, req.url);
+    const targetUrl = new URL(url);
+    const protocol = targetUrl.protocol === 'https:' ? https : http;
+
+    const forwardHeaders: Record<string, string | string[]> = {};
+
+    // Forward content-type (with multipart boundary) and content-length
+    if (req.headers['content-type']) forwardHeaders['content-type'] = req.headers['content-type'];
+    if (req.headers['content-length']) forwardHeaders['content-length'] = req.headers['content-length'];
+
+    // Inject auth headers from gateway middleware
+    ['x-user-id', 'x-user-email', 'x-user-role'].forEach((h) => {
+      if (req.headers[h]) forwardHeaders[h] = req.headers[h] as string;
+    });
+
+    const proxyReq = protocol.request(
+      {
+        hostname: targetUrl.hostname,
+        port: parseInt(targetUrl.port) || (targetUrl.protocol === 'https:' ? 443 : 80),
+        path: targetUrl.pathname + (targetUrl.search || ''),
+        method: req.method,
+        headers: forwardHeaders,
+      },
+      (proxyRes) => {
+        res.status(proxyRes.statusCode || 500);
+        proxyRes.pipe(res);
+      },
+    );
+
+    proxyReq.on('error', () => {
+      res.status(502).json({ message: `Service ${serviceName} is unavailable` });
+    });
+
+    req.pipe(proxyReq);
   }
 }

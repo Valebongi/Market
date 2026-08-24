@@ -68,6 +68,22 @@
   .dark ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
 }
 
+@layer utilities {
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-page-in {
+    animation: page-in 0.18s ease-out both;
+  }
+}
+
 @layer components {
   /* Contenedores */
   .container-narrow {
@@ -88,10 +104,22 @@
     background: linear-gradient(135deg, rgba(10, 37, 64, 0.97) 0%, rgba(37, 99, 235, 0.78) 60%, rgba(5, 150, 105, 0.68) 100%);
   }
 
-  /* Dot pattern for hero */
+  /* Dot pattern for hero (dark bg) */
   .dot-pattern {
     background-image: radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+
+  /* Market grid background — light pages with asset cards */
+  .market-grid-bg {
+    background-color: #f0f5ff;
+    background-image: radial-gradient(circle at 1px 1px, rgba(99,102,241,0.07) 1px, transparent 0);
+    background-size: 28px 28px;
+  }
+  .dark .market-grid-bg {
+    background-color: #0d1117;
+    background-image: radial-gradient(circle at 1px 1px, rgba(99,102,241,0.12) 1px, transparent 0);
+    background-size: 28px 28px;
   }
 
   /* Card hover effect */

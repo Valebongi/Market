@@ -1,39 +1,18 @@
-// ============================================================
-// TIPOS GLOBALES – DA VINCI INVENTA
-// ============================================================
-
-// --- Usuarios ---
-export type UserRole = "admin" | "asset_owner" | "entrepreneur";
-export type UserStatus = "active" | "suspended";
-
-export interface User {
+// ── Auth ──────────────────────────────────────────────────────────────
+export interface AuthUser {
   id: string;
   email: string;
-  role: UserRole;
-  status: UserStatus;
-  createdAt: string;
-  updatedAt: string;
-  profile?: UserProfile;
+  role: "admin" | "asset_owner" | "entrepreneur";
+  profile?: {
+    displayName: string;
+    avatarUrl?: string;
+    bio?: string;
+  };
 }
 
-export interface UserProfile {
-  id: string;
-  userId: string;
-  displayName: string;
-  bio?: string;
-  contactEmail?: string;
-  avatarUrl?: string;
-  website?: string;
-  linkedinUrl?: string;
-  twitterUrl?: string;
-  githubUrl?: string;
-  location?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// --- Activos ---
-export type AssetType =
+// ── Assets ────────────────────────────────────────────────────────────
+export type AssetStatus = "draft" | "published" | "flagged" | "archived";
+export type AssetCategory =
   | "software"
   | "brand"
   | "design"
@@ -41,133 +20,117 @@ export type AssetType =
   | "content"
   | "project"
   | "other";
-
 export type LicenseType = "exclusive" | "non_exclusive" | "temporary";
-
-export type AssetStatus = "draft" | "published" | "flagged" | "archived";
+export type PricingType = "fixed" | "negotiable" | "free";
 
 export interface Asset {
   id: string;
   ownerId: string;
   title: string;
+  slug: string;
   description: string;
-  assetType: AssetType;
+  assetType: AssetCategory;
   licenseType: LicenseType;
+  territory?: string;
   duration?: string;
-  territory: string;
   status: AssetStatus;
-  priceType: "fixed" | "range" | "negotiable";
+  priceType: "fixed" | "negotiable";
   priceFixed?: number;
-  priceFrom?: number;
-  priceTo?: number;
-  priceCurrency?: string;
-  allowedUses?: string[];
+  priceCurrency: string;
+  allowedUses: string[];
   additionalConditions?: string;
-  externalLinks?: string[];
-  previewUrls?: string[];
   tags: string[];
+  externalLinks: string[];
+  previewUrls: string[];
+  coverImageUrl?: string;
   viewCount: number;
   requestCount: number;
   createdAt: string;
   updatedAt: string;
-  owner?: UserProfile;
-  categories?: AssetCategory[];
+  owner?: {
+    displayName: string;
+    avatarUrl?: string;
+    linkedin?: string;
+  };
 }
 
-export interface AssetCategory {
+export interface RawAsset {
   id: string;
-  name: string;
+  ownerId: string;
+  title: string;
   slug: string;
-  icon?: string;
-  assetCount?: number;
+  description: string;
+  category: AssetCategory;
+  licenseType: LicenseType;
+  territory?: string;
+  duration?: string;
+  status: AssetStatus;
+  pricingType: PricingType;
+  price?: number;
+  currency?: string;
+  allowedUses?: string[];
+  restrictions?: string[];
+  tags?: Array<{ tag: string }>;
+  links?: Array<{ label: string; url: string; isMain?: boolean }>;
+  coverImageUrl?: string;
+  viewCount?: number;
+  requestCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-// --- Solicitudes de Licencia ---
-export type LicenseRequestStatus = "pending" | "accepted" | "rejected";
+// ── Requests / Messaging ──────────────────────────────────────────────
+export type RequestStatus = "pending" | "accepted" | "rejected" | "closed";
 
 export interface LicenseRequest {
   id: string;
   assetId: string;
+  assetTitle?: string;
   requesterId: string;
   ownerId: string;
-  intendedUse: string;
-  duration?: string;
-  budget?: string;
-  status: LicenseRequestStatus;
+  status: RequestStatus;
+  message?: string;
+  messages?: RequestMessage[];
   createdAt: string;
-  asset?: Asset;
-  requester?: UserProfile;
-  owner?: UserProfile;
-  messages?: Message[];
+  updatedAt: string;
 }
 
-// --- Mensajes ---
-export interface Message {
+export interface RequestMessage {
   id: string;
-  licenseRequestId: string;
+  requestId: string;
   senderId: string;
   content: string;
   createdAt: string;
-  sender?: UserProfile;
 }
 
-// --- Dominios ---
-export interface DomainSearch {
-  id: string;
-  userId: string;
-  domainName: string;
-  extension: string;
-  available: boolean;
-  price?: string;
-  searchedAt: string;
-}
-
+// ── Domains ───────────────────────────────────────────────────────────
 export interface DomainResult {
   domain: string;
   available: boolean;
-  price?: string;
-  registrarUrl?: string;
+  price?: number;
+  currency?: string;
 }
 
-// --- Moderación ---
-export type ModerationAction = "flagged" | "approved" | "removed";
+export interface DomainSearchResponse {
+  query: string;
+  results: DomainResult[];
+}
 
-export interface ModerationLog {
+// ── Users ─────────────────────────────────────────────────────────────
+export interface UserProfile {
   id: string;
-  assetId: string;
-  action: ModerationAction;
-  reason?: string;
-  createdAt: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  bio?: string;
+  linkedin?: string;
+  twitter?: string;
+  github?: string;
+  website?: string;
+  location?: string;
 }
 
-// --- Métricas ---
-export interface MetricDaily {
-  id: string;
-  metricName: string;
-  value: number;
-  date: string;
-}
-
-export interface DashboardStats {
-  // Para titulares
-  assetsPublished?: number;
-  requestsReceived?: number;
-  activeLicenses?: number;
-  totalViews?: number;
-  // Para emprendedores
-  requestsSent?: number;
-  activeConversations?: number;
-  savedAssets?: number;
-  domainSearches?: number;
-}
-
-// --- API Response ---
-export interface ApiResponse<T> {
-  data: T;
-  message?: string;
-  statusCode: number;
-}
-
+// ── Shared API shapes ─────────────────────────────────────────────────
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -176,16 +139,8 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-// --- Filtros de Marketplace ---
-export interface MarketplaceFilters {
-  search?: string;
-  categories?: string[];
-  licenseType?: LicenseType | "all";
-  assetType?: AssetType | "all";
-  priceFrom?: number;
-  priceTo?: number;
-  territory?: string;
-  sortBy?: "newest" | "most_viewed" | "most_requested";
-  page?: number;
-  limit?: number;
+export interface ApiSuccessResponse<T = unknown> {
+  statusCode: number;
+  data: T;
+  message?: string;
 }

@@ -1,0 +1,85 @@
+graph LR
+    GW(["🔀 Gateway\n:8080"])
+
+    subgraph AUTH["🔐 auth-service :3001"]
+        direction TB
+        A1["POST /auth/register\n🔓 público"]
+        A2["POST /auth/login\n🔓 público"]
+        A3["GET /auth/validate\n🔒 interno"]
+        A4["POST /auth/oauth/callback\n🔓 público"]
+        A5["POST /auth/forgot-password\n🔓 público"]
+        A6["POST /auth/reset-password\n🔓 público"]
+    end
+
+    subgraph ASSETS["📦 assets-service :3002"]
+        direction TB
+        B1["GET /assets\n🔓 público · filtros: category, status, search, page"]
+        B2["GET /assets/:id\n🔓 público · incrementa viewCount"]
+        B3["GET /assets/slug/:slug\n🔓 público"]
+        B4["POST /assets\n🔒 auth"]
+        B5["PUT /assets/:id\n🔒 owner"]
+        B6["PATCH /assets/:id/publish\n🔒 owner"]
+        B7["PATCH /assets/:id/archive\n🔒 owner"]
+        B8["DELETE /assets/:id\n🔒 owner"]
+        B9["POST /assets/upload-image\n🔒 auth · multipart · max 5MB"]
+        B10["POST /assets/:id/flag\n🔒 auth"]
+        B11["PATCH /assets/:id/request-count\n🔒 interno"]
+    end
+
+    subgraph USERS["👤 users-service :3003"]
+        direction TB
+        C1["GET /users\n🔒 admin · search, role, status, page"]
+        C2["GET /users/:userId\n🔓 público"]
+        C3["PUT /users/:userId/profile\n🔒 owner"]
+        C4["PATCH /users/:userId/status\n🔒 admin"]
+        C5["PATCH /users/:userId/role\n🔒 admin"]
+        C6["PATCH /users/:userId/asset-count\n🔒 interno"]
+        C7["GET /users/:userId/saved\n🔒 owner"]
+        C8["POST /users/:userId/saved/:assetId\n🔒 owner"]
+        C9["DELETE /users/:userId/saved/:assetId\n🔒 owner"]
+        C10["POST /users/profiles\n🔒 interno · sync desde auth"]
+    end
+
+    subgraph MSG["💬 messaging-service :3004"]
+        direction TB
+        D1["POST /requests\n🔒 auth"]
+        D2["GET /requests\n🔒 auth · propios como owner o requester"]
+        D3["GET /requests/:id\n🔒 auth · con mensajes"]
+        D4["PATCH /requests/:id/status\n🔒 owner · accept·reject·close"]
+        D5["POST /requests/:id/messages\n🔒 auth"]
+        D6["GET /requests/notifications\n🔒 auth"]
+        D7["PATCH /requests/notifications/:id/read\n🔒 auth"]
+        D8["PATCH /requests/notifications/read-all\n🔒 auth"]
+    end
+
+    subgraph DOM["🏷️ domains-service :3005"]
+        direction TB
+        E1["GET /domains\n🔓 público"]
+        E2["POST /domains\n🔒 admin"]
+        E3["PUT /domains/:id\n🔒 admin"]
+        E4["DELETE /domains/:id\n🔒 admin"]
+    end
+
+    subgraph ADMIN["🛡️ admin-service :3006"]
+        direction TB
+        F1["GET /admin/dashboard\n🔒 admin · último snapshot + logs"]
+        F2["GET /admin/metrics?range=7d|30d|90d|365d\n🔒 admin · histórico"]
+        F3["POST /admin/metrics/snapshot\n🔒 admin · captura manual"]
+        F4["POST /admin/moderation/log\n🔒 admin"]
+        F5["GET /admin/moderation/logs\n🔒 admin · filtros: assetId, adminId"]
+    end
+
+    GW --> AUTH
+    GW --> ASSETS
+    GW --> USERS
+    GW --> MSG
+    GW --> DOM
+    GW --> ADMIN
+
+    style GW fill:#D1FAE5,stroke:#059669,color:#065f46
+    style AUTH fill:#FEF3C7,stroke:#D97706,color:#92400e
+    style ASSETS fill:#DBEAFE,stroke:#2563EB,color:#1e40af
+    style USERS fill:#FCE7F3,stroke:#DB2777,color:#831843
+    style MSG fill:#F0FDF4,stroke:#16A34A,color:#14532d
+    style DOM fill:#FFF7ED,stroke:#EA580C,color:#7c2d12
+    style ADMIN fill:#F5F3FF,stroke:#7C3AED,color:#4c1d95

@@ -5,9 +5,11 @@ import Avatar from "@/components/ui/Avatar";
 import { RequestStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { Send, CheckCircle, XCircle } from "lucide-react";
+import { Send, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { requestsApi, usersApi } from "@/lib/api";
+import { requestsService as requestsApi } from "@/services/requests.service";
+import { usersService as usersApi } from "@/services/users.service";
+import DealClosureModal, { type DealClosureData } from "@/components/ui/DealClosureModal";
 
 interface Thread {
   id: string;
@@ -42,6 +44,9 @@ export default function RequestsPage() {
   const [sending, setSending] = useState(false);
   const [actioning, setActioning] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [showDealModal, setShowDealModal] = useState(false);
+  const [showMobileConversation, setShowMobileConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load thread list once
@@ -146,6 +151,12 @@ export default function RequestsPage() {
 
   const handleUpdateStatus = async (status: string) => {
     if (!activeThreadId) return;
+    // Show deal closure modal before finalizing rejected/closed status
+    if (status === "rejected" || status === "closed") {
+      setPendingStatus(status);
+      setShowDealModal(true);
+      return;
+    }
     setActioning(true);
     try {
       await requestsApi.updateStatus(activeThreadId, status);
@@ -154,6 +165,51 @@ export default function RequestsPage() {
       );
     } finally {
       setActioning(false);
+    }
+  };
+
+  const handleDealClosure = async (data: DealClosureData) => {
+    if (!activeThreadId || !pendingStatus) return;
+    setShowDealModal(false);
+    setActioning(true);
+    try {
+      // Finalize the status change
+      await requestsApi.updateStatus(activeThreadId, pendingStatus);
+      // Send a system message summarising the outcome
+      const summary = data.agreed
+        ? `✅ Acuerdo cerrado${data.licenseType ? ` — Licencia ${data.licenseType}` : ""}${data.estimatedValue ? ` — ${data.currency} ${data.estimatedValue.toLocaleString()}` : ""}${data.notes ? `\n${data.notes}` : ""}`
+        : `❌ Sin acuerdo${data.notes ? ` — ${data.notes}` : ""}`;
+      await requestsApi.sendMessage(activeThreadId, summary);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `closure_${Date.now()}`,
+          senderId: user?.id || "",
+          content: summary,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      setThreads((prev) =>
+        prev.map((t) => (t.id === activeThreadId ? { ...t, status: pendingStatus } : t))
+      );
+    } finally {
+      setActioning(false);
+      setPendingStatus(null);
+    }
+  };
+
+  const handleSkipDealClosure = async () => {
+    if (!activeThreadId || !pendingStatus) return;
+    setShowDealModal(false);
+    setActioning(true);
+    try {
+      await requestsApi.updateStatus(activeThreadId, pendingStatus);
+      setThreads((prev) =>
+        prev.map((t) => (t.id === activeThreadId ? { ...t, status: pendingStatus } : t))
+      );
+    } finally {
+      setActioning(false);
+      setPendingStatus(null);
     }
   };
 
@@ -184,9 +240,13 @@ export default function RequestsPage() {
   const isClosed = currentThread?.status === "rejected" || currentThread?.status === "closed";
 
   return (
-    <div className="flex h-[calc(100vh-0px)] overflow-hidden">
-      {/* LEFT: Thread list */}
-      <div className="w-80 border-r border-fog-gray dark:border-white/10 flex flex-col bg-white dark:bg-gray-900 shrink-0">
+    <div className="flex h-full overflow-hidden">
+      {/* LEFT: Thread list — full width on mobile when no conversation open */}
+      <div className={cn(
+        "border-r border-fog-gray dark:border-white/10 flex flex-col bg-white dark:bg-gray-900 shrink-0",
+        "w-full md:w-80",
+        showMobileConversation ? "hidden md:flex" : "flex"
+      )}>
         <div className="p-4 border-b border-fog-gray dark:border-white/10">
           <h2 className="text-lg font-semibold text-carbon-gray dark:text-gray-100">Mensajes</h2>
           <select
@@ -217,7 +277,7 @@ export default function RequestsPage() {
               return (
                 <button
                   key={thread.id}
-                  onClick={() => setActiveThreadId(thread.id)}
+                  onClick={() => { setActiveThreadId(thread.id); setShowMobileConversation(true); }}
                   className={cn(
                     "w-full flex items-start gap-3 p-4 border-b border-fog-gray dark:border-white/10 text-left hover:bg-snow-gray dark:hover:bg-white/5 transition-colors",
                     activeThreadId === thread.id && "bg-snow-gray dark:bg-white/5 border-l-[3px] border-l-electric-blue dark:border-l-blue-400"
@@ -239,11 +299,23 @@ export default function RequestsPage() {
         </div>
       </div>
 
-      {/* RIGHT: Conversation */}
+      {/* RIGHT: Conversation — full width on mobile when open */}
       {currentThread ? (
-        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#0d1117]">
+        <div className={cn(
+          "flex-1 flex flex-col min-w-0 bg-white dark:bg-[#0d1117]",
+          showMobileConversation ? "flex" : "hidden md:flex"
+        )}>
           {/* Header */}
-          <div className="px-6 py-4 border-b border-fog-gray dark:border-white/10 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-fog-gray dark:border-white/10 flex items-center gap-3">
+            {/* Mobile back button */}
+            <button
+              onClick={() => setShowMobileConversation(false)}
+              className="md:hidden p-1.5 -ml-1 rounded-lg text-slate-gray hover:text-carbon-gray hover:bg-snow-gray transition-colors"
+              aria-label="Volver a mensajes"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="flex flex-1 items-center justify-between">
             <div className="flex items-center gap-3">
               <Avatar name={otherUserName} size="sm" />
               <div>
@@ -255,6 +327,7 @@ export default function RequestsPage() {
               </div>
             </div>
             <RequestStatusBadge status={mapStatus(currentThread.status)} />
+            </div>
           </div>
 
           {/* Messages */}
@@ -320,6 +393,21 @@ export default function RequestsPage() {
             </div>
           )}
 
+          {/* Close conversation button for accepted threads */}
+          {currentThread.status === "accepted" && isOwner && (
+            <div className="px-6 py-2 border-t border-fog-gray dark:border-white/10 bg-snow-gray dark:bg-gray-900 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={actioning}
+                onClick={() => handleUpdateStatus("closed")}
+                className="text-slate-gray dark:text-gray-400 hover:text-soft-coral"
+              >
+                Cerrar conversación
+              </Button>
+            </div>
+          )}
+
           {/* Message Composer */}
           {!isClosed ? (
             <div className="px-6 py-4 border-t border-fog-gray dark:border-white/10">
@@ -355,13 +443,23 @@ export default function RequestsPage() {
           )}
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-snow-gray dark:bg-[#0d1117]">
+        <div className="hidden md:flex flex-1 items-center justify-center bg-snow-gray dark:bg-[#0d1117]">
           <div className="text-center">
             <p className="text-4xl mb-4">💬</p>
             <p className="font-semibold text-carbon-gray dark:text-gray-100">No hay conversación seleccionada</p>
             <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">Seleccioná un mensaje para comenzar</p>
           </div>
         </div>
+      )}
+
+      {/* Deal Closure Modal */}
+      {showDealModal && currentThread && (
+        <DealClosureModal
+          assetTitle={currentThread.assetTitle}
+          counterpartName={otherUserName}
+          onConfirm={handleDealClosure}
+          onSkip={handleSkipDealClosure}
+        />
       )}
     </div>
   );

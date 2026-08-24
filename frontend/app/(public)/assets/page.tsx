@@ -5,7 +5,7 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import AssetCard from "@/components/assets/AssetCard";
 import { AssetCardSkeleton } from "@/components/ui/Skeleton";
 import type { Asset } from "@/types";
-import { assetsApi, mapAsset } from "@/lib/api";
+import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 
 const CATEGORIES = [
   { slug: "software", label: "Software y Apps" },

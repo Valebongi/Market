@@ -18,6 +18,8 @@ model User {
   status           String    @default("active")       // active | suspended
   oauthProvider    String?
   oauthProviderId  String?
+  resetToken       String?   @map("resettoken")
+  resetTokenExpiry DateTime? @map("resettokenexpiry")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?

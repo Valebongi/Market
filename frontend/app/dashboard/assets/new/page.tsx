@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Upload, AlertCircle } from "lucide-react";
-import { assetsApi } from "@/lib/api";
+import { Check, ChevronRight, Upload, AlertCircle, ImagePlus, X, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/http";
+import { assetsService as assetsApi } from "@/services/assets.service";
 import Input, { Textarea } from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
@@ -125,13 +126,40 @@ export default function NewAssetPage() {
   });
 
   const [resources, setResources] = useState({
+    coverImageUrl: "",
     files: [] as File[],
     links: [""],
     previewUrls: [""],
   });
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverMode, setCoverMode] = useState<"upload" | "url">("upload");
+  const [coverUrlInput, setCoverUrlInput] = useState("");
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmation, setConfirmation] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  async function handleCoverUpload(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setCoverUploading(true);
+    const local = URL.createObjectURL(file);
+    setCoverPreview(local);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await apiFetch<{ url: string }>("/assets/upload-image", {
+        method: "POST",
+        body: form,
+      });
+      setResources((p) => ({ ...p, coverImageUrl: res.url }));
+    } catch {
+      setCoverPreview(null);
+      setResources((p) => ({ ...p, coverImageUrl: "" }));
+    } finally {
+      setCoverUploading(false);
+    }
+  }
 
   // Tag management
   const addTag = () => {
@@ -195,6 +223,9 @@ export default function NewAssetPage() {
       }
       if (licenseInfo.additionalConditions) {
         dto.restrictions = [licenseInfo.additionalConditions];
+      }
+      if (resources.coverImageUrl.trim()) {
+        dto.coverImageUrl = resources.coverImageUrl.trim();
       }
       const validLinks = resources.links.filter((l) => l.trim());
       const validPreviews = resources.previewUrls.filter((u) => u.trim());
@@ -503,6 +534,102 @@ export default function NewAssetPage() {
             <div>
               <h2 className="text-xl font-semibold text-carbon-gray">Recursos y Archivos</h2>
               <p className="text-sm text-slate-gray mt-1">Adjuntá documentación o muestras (opcional)</p>
+            </div>
+
+            {/* Cover Image */}
+            <div>
+              <label className="text-sm font-medium text-carbon-gray block mb-1">
+                Imagen de Portada{" "}
+                <span className="text-slate-gray font-normal">(opcional)</span>
+              </label>
+              <p className="text-xs text-slate-gray mb-3">
+                Se muestra en la tarjeta del marketplace. Ideal 1200×675px.
+              </p>
+
+              {/* Mode toggle */}
+              <div className="flex border border-fog-gray rounded-lg overflow-hidden mb-3 w-fit">
+                <button type="button" onClick={() => setCoverMode("upload")} className={cn("px-4 py-1.5 text-sm font-medium transition-colors", coverMode === "upload" ? "bg-electric-blue text-white" : "text-slate-gray hover:bg-snow-gray")}>
+                  Subir archivo
+                </button>
+                <button type="button" onClick={() => setCoverMode("url")} className={cn("px-4 py-1.5 text-sm font-medium border-l border-fog-gray transition-colors", coverMode === "url" ? "bg-electric-blue text-white" : "text-slate-gray hover:bg-snow-gray")}>
+                  URL pública
+                </button>
+              </div>
+
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCoverUpload(file);
+                  e.target.value = "";
+                }}
+              />
+
+              {coverMode === "url" ? (
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={coverUrlInput}
+                    onChange={(e) => {
+                      setCoverUrlInput(e.target.value);
+                      const url = e.target.value.trim();
+                      if (url) {
+                        setCoverPreview(url);
+                        setResources((p) => ({ ...p, coverImageUrl: url }));
+                      } else {
+                        setCoverPreview(null);
+                        setResources((p) => ({ ...p, coverImageUrl: "" }));
+                      }
+                    }}
+                    className="w-full h-10 px-4 border border-fog-gray rounded-lg text-sm focus:outline-none focus:border-electric-blue transition-colors"
+                  />
+                  {coverPreview && (
+                    <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-fog-gray bg-snow-gray">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={coverPreview} alt="Portada" className="w-full h-full object-cover" onError={() => setCoverPreview(null)} />
+                      <button type="button" onClick={() => { setCoverPreview(null); setCoverUrlInput(""); setResources((p) => ({ ...p, coverImageUrl: "" })); }} className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500/80 backdrop-blur-sm transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : coverPreview ? (
+                <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-fog-gray bg-snow-gray">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={coverPreview} alt="Portada" className="w-full h-full object-cover" />
+                  {coverUploading && (
+                    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                      <p className="text-white text-sm font-medium">Subiendo imagen...</p>
+                    </div>
+                  )}
+                  {!coverUploading && (
+                    <div className="absolute top-2 right-2 flex gap-2">
+                      <button type="button" onClick={() => coverInputRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-black/50 text-white text-xs font-medium hover:bg-black/70 backdrop-blur-sm transition-colors">
+                        Cambiar
+                      </button>
+                      <button type="button" onClick={() => { setCoverPreview(null); setResources((p) => ({ ...p, coverImageUrl: "" })); }} className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500/80 backdrop-blur-sm transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  {!coverUploading && resources.coverImageUrl && (
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-deep-emerald/90 text-white text-xs font-medium px-2 py-1 rounded-full backdrop-blur-sm">
+                      <Check className="h-3 w-3" /> Subida correctamente
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button type="button" onClick={() => coverInputRef.current?.click()} className="flex flex-col items-center justify-center w-full aspect-[16/9] border-2 border-dashed border-fog-gray rounded-xl bg-snow-gray hover:border-electric-blue hover:bg-blue-50/30 transition-all cursor-pointer">
+                  <ImagePlus className="h-8 w-8 text-slate-gray mb-2" />
+                  <p className="text-sm font-medium text-carbon-gray">Clic para subir imagen de portada</p>
+                  <p className="text-xs text-slate-gray mt-0.5">JPG, PNG, WebP · Máx. 5MB</p>
+                </button>
+              )}
             </div>
 
             {/* Drag & Drop */}

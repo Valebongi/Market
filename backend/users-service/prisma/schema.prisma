@@ -41,8 +41,21 @@ model UserProfile {
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   notificationSettings NotificationSettings?
+  savedAssets          SavedAsset[]
 
   @@map("user_profiles")
+}
+
+model SavedAsset {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  assetId   String      @map("asset_id")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@map("saved_assets")
 }
 
 model NotificationSettings {

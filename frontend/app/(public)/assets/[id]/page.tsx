@@ -10,10 +10,12 @@ import {
   Shield,
   CheckCircle,
   ExternalLink,
+  TrendingUp,
+  Flame,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import { ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber, formatRelativeTime } from "@/lib/utils";
-import { assetsApi, mapAsset } from "@/lib/api";
+import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 import AssetDetailSidebar from "@/components/assets/AssetDetailSidebar";
 import AssetOwnerInline from "@/components/assets/AssetOwnerInline";
 import type { Metadata } from "next";
@@ -156,27 +158,56 @@ export default async function AssetDetailPage({ params }: PageProps) {
               </h1>
 
               {/* Metadata */}
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-gray dark:text-gray-400">
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-gray dark:text-gray-400">
                 <span className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4" />
                   {LICENSE_TYPE_LABELS[asset.licenseType as keyof typeof LICENSE_TYPE_LABELS] || asset.licenseType}
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <Globe className="h-4 w-4" />
-                  {asset.territory}
-                </span>
+                {asset.territory && (
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="h-4 w-4" />
+                    {asset.territory}
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
                   <Clock className="h-4 w-4" />
                   {formatRelativeTime(asset.createdAt)}
                 </span>
-                <span className="flex items-center gap-1.5">
+              </div>
+
+              {/* Social proof row */}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full font-medium ${
+                  asset.viewCount >= 50
+                    ? "bg-blue-50 dark:bg-blue-950/30 text-electric-blue dark:text-blue-400"
+                    : "bg-snow-gray dark:bg-white/5 text-slate-gray dark:text-gray-400"
+                }`}>
                   <Eye className="h-4 w-4" />
                   {formatNumber(asset.viewCount)} vistas
                 </span>
-                <span className="flex items-center gap-1.5">
+
+                <span className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full font-medium ${
+                  asset.requestCount >= 3
+                    ? "bg-emerald-50 dark:bg-emerald-950/30 text-deep-emerald dark:text-emerald-400"
+                    : "bg-snow-gray dark:bg-white/5 text-slate-gray dark:text-gray-400"
+                }`}>
                   <MessageSquare className="h-4 w-4" />
-                  {formatNumber(asset.requestCount)} solicitudes
+                  {asset.requestCount === 1 ? "1 solicitud recibida" : `${formatNumber(asset.requestCount)} solicitudes recibidas`}
                 </span>
+
+                {asset.requestCount >= 5 && (
+                  <span className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full font-semibold bg-amber-50 dark:bg-amber-950/30 text-warm-amber dark:text-amber-400">
+                    <Flame className="h-4 w-4" />
+                    Activo popular
+                  </span>
+                )}
+
+                {asset.requestCount >= 3 && asset.requestCount < 5 && (
+                  <span className="text-sm text-slate-gray dark:text-gray-400 flex items-center gap-1">
+                    <TrendingUp className="h-4 w-4 text-deep-emerald" />
+                    {asset.requestCount} personas ya solicitaron este activo
+                  </span>
+                )}
               </div>
 
               {/* Owner inline — client component fetches real name */}

@@ -41,6 +41,7 @@ model Asset {
   currency      String      @default("USD")
   territory     String      @default("Mundial")
   duration      String?
+  coverImageUrl String?     @map("cover_image_url")
   allowedUses   String[]    @map("allowed_uses")
   restrictions  String[]
   status        AssetStatus @default(draft)

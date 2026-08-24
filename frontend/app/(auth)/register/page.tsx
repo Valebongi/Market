@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import { Upload, Search, CheckCircle } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import OAuthButtons from "@/components/auth/OAuthButtons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/http";
 
 
 type Role = "asset_owner" | "entrepreneur";
@@ -18,8 +17,12 @@ type Step = 1 | 2;
 
 function RegisterForm() {
   const { register } = useAuth();
-  const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || undefined;
+  const [returnTo, setReturnTo] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setReturnTo(params.get("returnTo") || undefined);
+  }, []);
 
   const [step, setStep] = useState<Step>(1);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -301,9 +304,5 @@ function RegisterForm() {
 }
 
 export default function RegisterPage() {
-  return (
-    <Suspense>
-      <RegisterForm />
-    </Suspense>
-  );
+  return <RegisterForm />;
 }
