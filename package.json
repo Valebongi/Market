@@ -1,0 +1,23 @@
+{
+  "name": "davinci-inventa-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Workspace de test e integracion. No es un paquete de produccion: solo aloja el runner y la config de CI.",
+  "scripts": {
+    "test": "jest",
+    "test:contracts": "jest --selectProjects contracts",
+    "test:authz": "jest --selectProjects authz",
+    "test:frontend": "jest --selectProjects frontend",
+    "test:migrations": "node scripts/check-migration-drift.mjs"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.11.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  }
+}

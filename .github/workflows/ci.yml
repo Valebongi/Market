@@ -1,0 +1,186 @@
+name: CI
+
+# Cualquier job en rojo bloquea el merge. No hay pasos informativos:
+# si algo no debe frenar el build, no va en este archivo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Una PR que recibe varios pushes cancela las corridas viejas.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────
+  # Tests de contrato y autorizacion. Es el job que atrapa las divergencias
+  # entre capas, que es de donde salio la mayoria de los bugs del proyecto.
+  # ───────────────────────────────────────────────────────────────────────
+  tests:
+    name: Tests (contratos + autorizacion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar el workspace de test
+        run: npm ci
+
+      # Los specs importan codigo real de los servicios, que a su vez importa
+      # @prisma/client. Sin generar el cliente, el import explota en runtime.
+      - name: Instalar y generar Prisma en los servicios bajo prueba
+        run: |
+          for s in assets-service messaging-service users-service; do
+            echo "::group::$s"
+            npm ci --prefix "backend/$s"
+            npx --prefix "backend/$s" prisma generate --schema "backend/$s/prisma/schema.prisma"
+            echo "::endgroup::"
+          done
+
+      - name: Instalar el gateway (tests del middleware de auth)
+        run: npm ci --prefix backend/gateway
+
+      - name: Instalar el frontend (tests de mapAsset)
+        run: npm ci --prefix frontend
+
+      - name: Correr los tests
+        run: npm test -- --ci --runInBand
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Deriva de migraciones. Este job solo habria atrapado los dos blockers de
+  # produccion: schema.prisma editado sin generar la migracion. En local no se
+  # nota porque la base ya tiene la columna; en un deploy limpio, no arranca.
+  # ───────────────────────────────────────────────────────────────────────
+  migraciones:
+    name: Deriva de migraciones
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Instalar Prisma en cada servicio con schema
+        run: |
+          for s in auth-service assets-service users-service messaging-service domains-service admin-service; do
+            echo "::group::$s"
+            npm ci --prefix "backend/$s"
+            echo "::endgroup::"
+          done
+
+      - name: Chequear deriva
+        env:
+          DATABASE_URL_BASE: postgresql://postgres:postgres@localhost:5432
+        run: node scripts/check-migration-drift.mjs
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Build + lint del frontend.
+  # ───────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (build + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      # `next lint` termina en 0 con warnings y != 0 con errores. Hoy hay 3
+      # warnings preexistentes de react-hooks/exhaustive-deps en las paginas de
+      # admin: no bloquean, pero cualquier ERROR nuevo si.
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Build de cada servicio de backend, en paralelo.
+  # ───────────────────────────────────────────────────────────────────────
+  backend:
+    name: Build ${{ matrix.servicio }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        servicio:
+          - gateway
+          - auth-service
+          - assets-service
+          - users-service
+          - messaging-service
+          - domains-service
+          - admin-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/${{ matrix.servicio }}/package-lock.json
+
+      - run: npm ci
+        working-directory: backend/${{ matrix.servicio }}
+
+      - name: Generar el cliente de Prisma
+        working-directory: backend/${{ matrix.servicio }}
+        run: |
+          if [ -f prisma/schema.prisma ]; then
+            npx prisma generate
+          else
+            echo "Sin schema.prisma, se omite."
+          fi
+
+      - name: Build
+        working-directory: backend/${{ matrix.servicio }}
+        run: npm run build
+
+      # Los tests viven en tests/, fuera del arbol de los servicios, justamente
+      # para no entrar en el build. Si alguno reaparece en dist/, es que se
+      # colo un spec adentro del servicio (o que su tsconfig perdio el
+      # `include`, como le paso a users-service).
+      - name: Verificar que no se colaron tests en dist/
+        working-directory: backend/${{ matrix.servicio }}
+        run: |
+          if find dist -path '*test*' -o -name '*.spec.js' | grep -q .; then
+            echo "::error::Se emitieron archivos de test en dist/"
+            find dist -path '*test*' -o -name '*.spec.js'
+            exit 1
+          fi
+          echo "dist/ limpio."
