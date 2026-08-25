@@ -42,7 +42,10 @@ export default function DashboardPage() {
     if (!user) return;
 
     Promise.allSettled([
-      assetsApi.list({ ownerId: user.id, status: "published", limit: 100 }),
+      // Activos publicados del titular. Va por la ruta de gestión igual que
+      // /dashboard/assets: el scope sale del token, no de un `ownerId` que
+      // viaja en la querystring de una ruta pública.
+      assetsApi.manageList({ status: "published", limit: 100 }),
       requestsApi.list("owner"),
     ])
       .then(([assetsResult, requestsResult]) => {

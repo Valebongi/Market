@@ -6,6 +6,7 @@ import { StatCard } from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import Link from "next/link";
 import { apiFetch } from "@/lib/http";
+import { assetsService as assetsApi } from "@/services/assets.service";
 
 interface Stats {
   totalUsers: number;
@@ -31,7 +32,9 @@ export default function AdminDashboardPage() {
       try {
         const [usersRes, allAssetsRes, publishedRes, requestsRes, topAssetsRes] = await Promise.allSettled([
           apiFetch<{ total: number }>("/users?limit=1"),
-          apiFetch<{ total: number }>("/assets?limit=1", { auth: false }),
+          // Total REAL: la ruta pública sólo cuenta `published`, así que
+          // "Total de activos" daba exactamente lo mismo que "Publicados".
+          assetsApi.manageList({ limit: 1 }),
           apiFetch<{ total: number }>("/assets?status=published&limit=1", { auth: false }),
           apiFetch<{ total: number }>("/requests?limit=1"),
           apiFetch<{ data: TopAsset[] }>("/assets?limit=5&sortBy=viewCount&sortOrder=desc", { auth: false }),

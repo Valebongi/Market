@@ -89,11 +89,13 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function getPriceDisplay(asset: Asset) {
+  // `free` va PRIMERO: su `priceFixed` es 0, que es falsy, así que cualquier
+  // chequeo por `!priceFixed` lo capturaría antes y lo mostraría "A consultar".
+  if (asset.priceType === "free") {
+    return { label: "Gratuito", type: "free" as const };
+  }
   if (asset.priceType === "negotiable" || !asset.priceFixed) {
     return { label: "A consultar", type: "negotiable" as const };
-  }
-  if (asset.priceFixed === 0) {
-    return { label: "Gratuito", type: "free" as const };
   }
   return {
     label: `${asset.priceCurrency ?? "USD"} ${Number(asset.priceFixed).toLocaleString("es-AR")}`,

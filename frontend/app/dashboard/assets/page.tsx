@@ -225,11 +225,14 @@ export default function MyAssetsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // Fetch all assets for this owner (all statuses)
+      // Activos del titular en todos los estados. Va por `manageList` (ruta
+      // autenticada): la pública fuerza `status: 'published'` y devolvía
+      // vacío para borradores y archivados.
+      // Sin `ownerId`: el backend lo pisa con el `sub` del token.
       const [published, drafts, archived] = await Promise.all([
-        assetsApi.list({ ownerId: user.id, status: "published", limit: 100 }),
-        assetsApi.list({ ownerId: user.id, status: "draft", limit: 100 }),
-        assetsApi.list({ ownerId: user.id, status: "archived", limit: 100 }),
+        assetsApi.manageList({ status: "published", limit: 100 }),
+        assetsApi.manageList({ status: "draft", limit: 100 }),
+        assetsApi.manageList({ status: "archived", limit: 100 }),
       ]);
       const all = [
         ...(published.data || []),

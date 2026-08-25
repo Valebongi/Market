@@ -5,6 +5,7 @@ import { TrendingUp, ArrowUpRight, RefreshCw } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
 import Button from "@/components/ui/Button";
 import { apiFetch } from "@/lib/http";
+import { assetsService as assetsApi } from "@/services/assets.service";
 import EmptyState from "@/components/ui/EmptyState";
 import { getAssetCategoryLabel } from "@/lib/asset-categories";
 
@@ -88,7 +89,9 @@ export default function AdminMetricsPage() {
     try {
       const [usersRes, assetsRes, publishedRes, requestsRes] = await Promise.all([
         apiFetch<{ total: number }>("/users?limit=1"),
-        apiFetch<{ total: number }>("/assets?limit=1", { auth: false }),
+        // Total REAL (incluye borradores y archivados): la ruta pública
+        // sólo cuenta `published`.
+        assetsApi.manageList({ limit: 1 }),
         apiFetch<{ total: number }>("/assets?status=published&limit=1", { auth: false }),
         apiFetch<{ total: number }>("/requests?limit=1"),
       ]);

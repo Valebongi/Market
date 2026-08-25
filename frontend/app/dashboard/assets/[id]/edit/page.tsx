@@ -78,7 +78,10 @@ export default function EditAssetPage() {
   useEffect(() => {
     async function load() {
       try {
-        const raw = await assetsApi.get(assetId);
+        // `manageGet`: lee en cualquier estado (la ruta pública da 404 para
+        // borradores y archivados) y no incrementa `viewCount`, así que abrir
+        // el editor no infla las métricas del propio titular.
+        const raw = await assetsApi.manageGet(assetId);
         const a = mapAsset(raw);
         setAsset(a);
 

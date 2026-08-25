@@ -73,13 +73,65 @@ export class AssetsController {
     return this.assetsService.create(headers['x-user-id'], dto);
   }
 
+  // ── Lectura publica (anonima) ───────────────────────────────────────
+  // Estas tres rutas estan excluidas del middleware de auth del gateway
+  // (`gateway/src/app.module.ts`), asi que NO hay `x-user-id` confiable en
+  // ellas: solo pueden devolver activos publicados.
+
+  /**
+   * Listado publico. El filtro de estado NO se toma del query string: lo fuerza
+   * el servicio a `published`. `?status=draft` ya no devuelve borradores.
+   */
   @Get()
   findAll(@Query() filters: FilterAssetsDto) {
-    // Public: only return published unless ownerId or admin filter is specified
-    if (!filters.ownerId && !filters.status) {
-      filters.status = 'published';
-    }
-    return this.assetsService.findAll(filters);
+    return this.assetsService.findAllPublic(filters);
+  }
+
+  // ── Lectura autenticada (dashboard del titular y panel de admin) ─────
+  //
+  // Van bajo `manage/` con DOS segmentos a proposito. El gateway excluye del
+  // middleware de auth los patrones `assets` y `assets/:id` (GET), que matchean
+  // un solo segmento; `assets/manage/...` no matchea ninguno de los dos, asi que
+  // el middleware SI corre, valida el JWT y pisa `x-user-id` con el `sub` del
+  // token.
+  //
+  // Ese "pisa" es la parte que importa: el proxy del gateway reenvia
+  // `x-user-id` tal como venga en la request, y en una ruta excluida nadie lo
+  // sobreescribe. Un endpoint publico que decidiera visibilidad mirando ese
+  // header seria trivial de falsificar mandandolo a mano. Por eso la separacion
+  // es por ruta y no por header.
+
+  /**
+   * `GET /assets/manage/list` — listado del titular con filtro de estado real.
+   * Un titular solo ve lo suyo (el `ownerId` se pisa con el del token); un admin
+   * ve todo.
+   */
+  @Get('manage/list')
+  findAllManaged(
+    @Headers() headers: AuthHeaders,
+    @Query() filters: FilterAssetsDto,
+  ) {
+    return this.assetsService.findAllManaged(
+      filters,
+      headers['x-user-id'],
+      headers['x-user-role'],
+    );
+  }
+
+  /**
+   * `GET /assets/manage/:id` — detalle en cualquier estado para el titular
+   * (edicion) o para un admin (moderacion). No incrementa `viewCount`.
+   */
+  @Get('manage/:id')
+  findOneManaged(
+    @Param('id') id: string,
+    @Headers() headers: AuthHeaders,
+  ) {
+    return this.assetsService.findOneManaged(
+      id,
+      headers['x-user-id'],
+      headers['x-user-role'],
+    );
   }
 
   @Get('slug/:slug')
@@ -87,6 +139,7 @@ export class AssetsController {
     return this.assetsService.findBySlug(slug);
   }
 
+  /** Detalle publico por id. Solo activos publicados. */
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.assetsService.findOne(id);

@@ -176,7 +176,6 @@ export default function DomainsPage() {
                 <Globe className={cn("h-5 w-5 shrink-0", result.available ? "text-deep-emerald" : "text-slate-gray")} />
                 <div className="min-w-0">
                   <p className="font-mono font-semibold text-carbon-gray truncate">{result.domain}</p>
-                  {result.price && <p className="text-xs text-slate-gray mt-0.5">{result.price}</p>}
                 </div>
                 <span
                   className={cn(
@@ -193,7 +192,17 @@ export default function DomainsPage() {
                     size="sm"
                     icon={<ExternalLink className="h-3.5 w-3.5" />}
                     iconPosition="right"
-                    onClick={() => window.open("https://www.namecheap.com", "_blank")}
+                    // `registrarUrl` es el link de AFILIACIÓN que arma el backend
+                    // por dominio. Mandar al usuario a la home del registrador
+                    // pierde la atribución (y con ella, la comisión). El backend
+                    // lo manda `null` sólo si el dominio no está disponible;
+                    // si igual falta, no hay nada útil que abrir.
+                    disabled={!result.registrarUrl}
+                    onClick={() => {
+                      if (result.registrarUrl) {
+                        window.open(result.registrarUrl, "_blank", "noopener,noreferrer");
+                      }
+                    }}
                   >
                     Registrar
                   </Button>

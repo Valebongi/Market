@@ -8,26 +8,8 @@ import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS } from "@/lib/utils";
 import { apiFetch } from "@/lib/http";
-import type { AssetCategory } from "@/types";
-
-interface RawAsset {
-  id: string;
-  ownerId: string;
-  title: string;
-  category: string;
-  status: string;
-  viewCount: number;
-  requestCount: number;
-  createdAt: string;
-  tags: { id: string; tag: string }[];
-}
-
-interface PaginatedResponse {
-  data: RawAsset[];
-  total: number;
-  page: number;
-  limit: number;
-}
+import { assetsService as assetsApi } from "@/services/assets.service";
+import type { AssetCategory, RawAsset } from "@/types";
 
 const STATUS_OPTIONS = ["Todos", "Publicados", "Borradores", "Archivados"];
 
@@ -62,12 +44,18 @@ export default function AdminAssetsPage() {
   async function fetchAssets() {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "100", sortBy: "createdAt", sortOrder: "desc" });
-      if (search) params.set("search", search);
+      // Moderación: necesita ver borradores y archivados, así que va por la
+      // ruta de gestión con el token del admin. La pública fuerza `published`.
+      const params: Record<string, string | number> = {
+        limit: 100,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      };
+      if (search) params.search = search;
       const st = statusLabel(statusFilter);
-      if (st) params.set("status", st);
+      if (st) params.status = st;
 
-      const res = await apiFetch<PaginatedResponse>(`/assets?${params.toString()}`, { auth: false });
+      const res = await assetsApi.manageList(params);
       setAssets(res.data ?? []);
       setTotal(res.total ?? 0);
     } catch {
@@ -187,8 +175,8 @@ export default function AdminAssetsPage() {
                 <td className="px-4 py-3">
                   <AssetStatusBadge status={asset.status} />
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-gray">{asset.viewCount}</td>
-                <td className="px-4 py-3 text-sm text-slate-gray">{asset.requestCount}</td>
+                <td className="px-4 py-3 text-sm text-slate-gray">{asset.viewCount ?? 0}</td>
+                <td className="px-4 py-3 text-sm text-slate-gray">{asset.requestCount ?? 0}</td>
                 <td className="px-4 py-3 text-xs text-slate-gray">{formatRelativeTime(asset.createdAt)}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5">
@@ -282,7 +270,7 @@ export default function AdminAssetsPage() {
               <p><span className="font-medium text-carbon-gray">ID Titular:</span> <span className="font-mono">{reviewAsset.ownerId}</span></p>
               <p><span className="font-medium text-carbon-gray">Tipo:</span> {ASSET_TYPE_LABELS[reviewAsset.category as AssetCategory] ?? reviewAsset.category}</p>
               <p><span className="font-medium text-carbon-gray">Estado actual:</span> {reviewAsset.status}</p>
-              <p><span className="font-medium text-carbon-gray">Vistas / Solicitudes:</span> {reviewAsset.viewCount} / {reviewAsset.requestCount}</p>
+              <p><span className="font-medium text-carbon-gray">Vistas / Solicitudes:</span> {reviewAsset.viewCount ?? 0} / {reviewAsset.requestCount ?? 0}</p>
             </div>
 
             {/* Checklist */}
