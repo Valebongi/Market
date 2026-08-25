@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -98,7 +99,25 @@ export class UsersService {
     page?: number;
     limit?: number;
   }) {
-    const { search, role, status, page = 1, limit = 20 } = filters;
+    const { search, role, status } = filters;
+
+    // Los defaults de destructuring (`page = 1`) NO alcanzaban, y por eso este
+    // endpoint —el listado de usuarios del panel de admin— devolvia 500 salvo
+    // que el llamador mandara page Y limit los dos.
+    //
+    // Motivo: el ValidationPipe global corre con `transform: true`, asi que un
+    // `@Query('page') page?: number` ausente llega como NaN (no como undefined)
+    // y el default nunca se aplica. Con page=NaN, `skip = (page-1)*limit` da
+    // NaN y Prisma rechaza la query entera con "Argument `skip` is missing".
+    //
+    // El frontend pega exactamente asi: `/users?limit=1` (dashboard de admin y
+    // metricas) y `/users?limit=100` (listado), siempre sin `page`.
+    const page = Number.isFinite(Number(filters.page)) && Number(filters.page) >= 1
+      ? Math.floor(Number(filters.page))
+      : 1;
+    const limit = Number.isFinite(Number(filters.limit)) && Number(filters.limit) >= 1
+      ? Math.floor(Number(filters.limit))
+      : 20;
 
     const where: any = { deletedAt: null };
     if (role) where.role = role;
@@ -134,6 +153,29 @@ export class UsersService {
    * upsert, el reintento es un no-op barato y el perfil se autorrepara.
    */
   async createProfile(dto: CreateProfileDto) {
+    const esBootstrapAdmin = dto.bootstrapAdmin === true;
+
+    if (esBootstrapAdmin) {
+      // Cerrojo 1: solo en modo token verificado. En el modo backstop
+      // (`INTERNAL_SERVICE_TOKEN` vacio) el unico control es "no traer headers
+      // de gateway", que cualquiera con acceso a la red interna puede cumplir.
+      // Escribir `role` en base a eso seria demasiado. Falla cerrado.
+      if (!this.config.get<string>('INTERNAL_SERVICE_TOKEN')) {
+        throw new ForbiddenException(
+          'bootstrapAdmin requiere INTERNAL_SERVICE_TOKEN configurado en users-service',
+        );
+      }
+      // Cerrojo 2: el flag solo sirve para promover a admin. No es un
+      // "forzar rol arbitrario" de proposito general.
+      if (dto.role !== 'admin') {
+        throw new BadRequestException('bootstrapAdmin solo es valido con role="admin"');
+      }
+      // Auditoria del lado de users-service. Nunca se loguea el token.
+      console.warn(
+        `[users][bootstrap-admin] promoviendo perfil a admin (userId=${dto.userId}).`,
+      );
+    }
+
     return this.prisma.userProfile.upsert({
       where: { userId: dto.userId },
       create: {
@@ -147,6 +189,15 @@ export class UsersService {
         // No pisa displayName ni role: el usuario pudo haberlos cambiado desde
         // el perfil o un admin desde el panel. Solo rellena el email si falta.
         ...(dto.contactEmail ? { contactEmail: dto.contactEmail } : {}),
+        // Unica excepcion a lo de arriba: el bootstrap del primer admin. Se
+        // alinea tambien `status` y se levanta un `deletedAt` porque un perfil
+        // suspendido o borrado no aparece en el listado del panel — un admin
+        // invisible en su propio panel es la clase de estado a medias que este
+        // mecanismo existe para evitar. Del lado de auth ya se verifico que la
+        // cuenta esta activa y no borrada.
+        ...(esBootstrapAdmin
+          ? { role: 'admin' as const, status: 'active' as const, deletedAt: null }
+          : {}),
       },
       include: { notificationSettings: true },
     });

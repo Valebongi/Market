@@ -48,3 +48,32 @@ model UserProfile {
 
   @@map("user_profiles")
 }
+
+/// Marca de ejecución del bootstrap del primer admin.
+///
+/// Existe por una sola razón: hacer que el mecanismo sea de UN SOLO USO. Sin
+/// esta tabla, cualquier bootstrap por variable de entorno vuelve a promover en
+/// cada arranque — o sea, una puerta trasera permanente cuya llave es una
+/// variable que nadie se acuerda de borrar.
+///
+/// `lock` vale SIEMPRE 1 y es `@unique`: el one-shot lo garantiza el índice
+/// único de Postgres, no un `SELECT` previo. Dos instancias arrancando a la vez
+/// (un despliegue rolling de Railway levanta la nueva antes de bajar la vieja)
+/// compiten por el INSERT y exactamente una gana; la otra recibe P2002 y aborta.
+model AdminBootstrap {
+  id              String    @id @default(uuid())
+  lock            Int       @unique @default(1)
+  /// Email objetivo, normalizado a minúsculas. Es identidad, no secreto.
+  email           String
+  userId          String?
+  /// promoted | created | skipped_existing_admin
+  outcome         String
+  userCreated     Boolean   @default(false)
+  /// Cuándo se replicó el rol al perfil de users-service. Null = pendiente:
+  /// el próximo arranque reintenta SOLO la sincronización, sin volver a tocar
+  /// roles en auth.
+  profileSyncedAt DateTime?
+  executedAt      DateTime  @default(now())
+
+  @@map("admin_bootstraps")
+}
