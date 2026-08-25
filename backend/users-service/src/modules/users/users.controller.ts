@@ -21,6 +21,7 @@ import {
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { IncrementCountDto } from './dto/increment-count.dto';
+import { INTERNAL_TOKEN_HEADER } from '../../common/internal-auth';
 
 /**
  * Autorización: este servicio confía en los headers `x-user-id` / `x-user-role`
@@ -33,10 +34,27 @@ import { IncrementCountDto } from './dto/increment-count.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // Internal: called by auth-service after registration
+  /**
+   * Interno: lo llama auth-service al registrar/loguear. NO es un endpoint de
+   * usuario final aunque el gateway proxee `/api/v1/users/*` hacia acá — de ahí
+   * el `assertInternalCaller`, que rechaza cualquier request que venga con
+   * identidad de gateway. Ver el comentario del método en el service.
+   */
   @Post('profiles')
   @HttpCode(HttpStatus.CREATED)
-  createProfile(@Body() dto: CreateProfileDto) {
+  createProfile(
+    @Body() dto: CreateProfileDto,
+    @Headers(INTERNAL_TOKEN_HEADER) internalToken: string,
+    @Headers('x-user-id') gatewayUserId: string,
+    @Headers('x-user-email') gatewayEmail: string,
+    @Headers('x-user-role') gatewayRole: string,
+  ) {
+    this.usersService.assertInternalCaller({
+      internalToken,
+      gatewayUserId,
+      gatewayEmail,
+      gatewayRole,
+    });
     return this.usersService.createProfile(dto);
   }
 

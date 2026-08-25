@@ -3,7 +3,9 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { secretsMatch } from '../../common/internal-auth';
 import {
   UpdateProfileDto,
   UpdateNotificationSettingsDto,
@@ -13,7 +15,55 @@ import { CreateProfileDto } from './dto/create-profile.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  /**
+   * Autoriza el ÚNICO endpoint servicio-a-servicio del sistema
+   * (`POST /users/profiles`, que llama auth-service al registrar/loguear).
+   *
+   * Antes no validaba nada. Como el gateway proxea `/api/v1/users/*`, cualquier
+   * usuario logueado podía crear perfiles arbitrarios — incluido uno con
+   * `role: 'admin'`, que es el que lee el panel de administración.
+   *
+   * Dos modos, a propósito:
+   *
+   * 1. `INTERNAL_SERVICE_TOKEN` seteado → se exige el header `x-internal-token`
+   *    y se compara en tiempo constante. Es el control real: un secreto que solo
+   *    conocen auth-service y users-service, y que además NO puede viajar desde
+   *    afuera porque el proxy del gateway no reenvía headers arbitrarios.
+   *
+   * 2. Sin `INTERNAL_SERVICE_TOKEN` → se rechaza toda request que traiga
+   *    identidad de gateway (`x-user-id` / `x-user-email` / `x-user-role`).
+   *    auth-service llama por la red interna sin ninguno de esos headers, y el
+   *    gateway SIEMPRE inyecta los tres para esta ruta (no está en su lista de
+   *    exclusiones), así que "trae identidad" equivale a "vino de afuera".
+   *
+   * El modo 2 existe para que este fix se pueda desplegar sin coordinar una
+   * variable de entorno nueva: cierra el agujero hoy y se endurece solo cuando
+   * el secreto exista. Es un backstop, no el destino final.
+   */
+  assertInternalCaller(ctx: {
+    internalToken?: string;
+    gatewayUserId?: string;
+    gatewayEmail?: string;
+    gatewayRole?: string;
+  }): void {
+    const expected = this.config.get<string>('INTERNAL_SERVICE_TOKEN');
+
+    if (expected) {
+      if (!secretsMatch(ctx.internalToken, expected)) {
+        throw new ForbiddenException('Endpoint interno: credencial de servicio inválida');
+      }
+      return;
+    }
+
+    if (ctx.gatewayUserId || ctx.gatewayEmail || ctx.gatewayRole) {
+      throw new ForbiddenException('Endpoint interno: no accesible desde el gateway');
+    }
+  }
 
   /**
    * El requester (según los headers que inyecta el gateway) es el dueño del
@@ -170,7 +220,16 @@ export class UsersService {
     });
   }
 
+  /**
+   * Sin el chequeo previo, borrar un userId inexistente llegaba a Prisma como
+   * un `update` sin match: P2025 sin capturar = 500. Ahora es 404, y repetir la
+   * baja es un no-op idempotente en vez de repisar `deletedAt`.
+   */
   async softDelete(userId: string) {
+    const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
+    if (!existing) throw new NotFoundException('User not found');
+    if (existing.deletedAt) return existing;
+
     return this.prisma.userProfile.update({
       where: { userId },
       data: { deletedAt: new Date() },

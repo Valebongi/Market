@@ -3,6 +3,8 @@ import {
   Post,
   Body,
   Get,
+  Delete,
+  Param,
   Headers,
   HttpCode,
   HttpStatus,
@@ -62,6 +64,34 @@ export class AuthController {
   async resetPassword(@Body() dto: ResetPasswordDto) {
     const result = await this.authService.resetPassword(dto.token, dto.newPassword);
     return { statusCode: 200, ...result };
+  }
+
+  /**
+   * Baja administrativa. `:identifier` acepta el userId (uuid) o el email.
+   *
+   * El rol sale del header `x-user-role` que inyecta el gateway tras validar el
+   * JWT; sin ese header la operación falla cerrada (403). Igual que en
+   * users-service, esto es defensa en profundidad y no reemplaza que el
+   * servicio no sea alcanzable desde internet.
+   *
+   * Solo da de baja el lado auth. El perfil se borra aparte con
+   * `DELETE /api/v1/users/:userId`.
+   */
+  @Delete('users/:identifier')
+  @HttpCode(HttpStatus.OK)
+  async deleteUser(
+    @Param('identifier') identifier: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+  ) {
+    const result = await this.authService.adminSoftDelete(identifier, requesterRole, requesterId);
+    return {
+      statusCode: 200,
+      message: result.alreadyDeleted
+        ? 'La cuenta ya estaba dada de baja'
+        : 'Cuenta dada de baja',
+      data: result,
+    };
   }
 
   @Post('oauth/callback')
