@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
+import { parseAllowedOrigins } from './common/cors-origins';
 
 /**
  * `trust proxy` de Express. Sin esto, detrás de nginx/Caddy todas las requests
@@ -51,8 +52,13 @@ async function bootstrap() {
     }),
   );
 
+  // Lista explícita de orígenes (FRONTEND_URL admite varios separados por coma).
+  // Con un array, `cors` devuelve el header solo si el Origin de la request está
+  // en la lista, y agrega `Vary: Origin` para que ningún cache mezcle respuestas.
+  const allowedOrigins = parseAllowedOrigins(process.env.FRONTEND_URL);
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: allowedOrigins,
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -61,7 +67,7 @@ async function bootstrap() {
   const port = process.env.PORT || 8080;
   await app.listen(port);
   console.log(`API Gateway running on port ${port}`);
-  console.log(`Frontend allowed: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  console.log(`Frontend allowed: ${allowedOrigins.join(', ')}`);
   console.log(
     `Rate limit: ${process.env.RATE_LIMIT_MAX || 100} req / ${process.env.RATE_LIMIT_TTL || 60000}ms ` +
       `(auth: ${process.env.RATE_LIMIT_AUTH_MAX || 5} req / ${process.env.RATE_LIMIT_AUTH_TTL || 60000}ms) ` +
