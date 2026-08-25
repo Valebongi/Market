@@ -44,11 +44,16 @@ const jsonLd = {
       url: SITE_URL,
       name: "Da Vinci Inventa",
       publisher: { "@id": `${SITE_URL}/#organization` },
+      // El `SearchAction` apuntaba a `/?search=`, y la home no lee ese
+      // parámetro: era markup declarándole a Google una capacidad inexistente,
+      // el mismo criterio por el que se sacaron `seller` y `availability` del
+      // `Product`. Ahora apunta a `/assets?search=`, que desde que el catálogo
+      // es SSR sí filtra de verdad.
       potentialAction: {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: `${SITE_URL}/?search={search_term_string}`,
+          urlTemplate: `${SITE_URL}/assets?search={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       },

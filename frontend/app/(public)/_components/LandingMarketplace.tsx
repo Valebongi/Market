@@ -181,6 +181,84 @@ export default function LandingMarketplace() {
         </div>
       </section>
 
+      {/* ── CÓMO FUNCIONA ────────────────────────────────────────────
+          El `id` no es decorativo: el navbar y el footer enlazan
+          `/#como-funciona` desde TODAS las páginas del sitio y hasta ahora ese
+          ancla no existía — el único `id` de la home era `main-content`, así
+          que el enlace no llevaba a ningún lado.
+
+          El copy es deliberadamente literal sobre lo que la plataforma hace y
+          lo que no. No hay pagos, no hay verificación de titularidad y no hay
+          contratos firmados acá: prometerlo sería un riesgo legal real. */}
+      <section
+        id="como-funciona"
+        aria-labelledby="como-funciona-title"
+        className="scroll-mt-24 border-b border-fog-gray dark:border-white/10 bg-white dark:bg-[#0d1117]"
+      >
+        <div className="container-market px-4 sm:px-6 py-12 sm:py-14">
+          <h2
+            id="como-funciona-title"
+            className="text-2xl sm:text-3xl font-bold text-carbon-gray dark:text-gray-100 text-center"
+          >
+            Cómo funciona
+          </h2>
+          <p className="mt-3 text-center text-base text-slate-gray dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            Da Vinci Inventa es el lugar donde quien tiene un activo intelectual
+            —un software, un diseño, una marca, un modelo de negocio— se
+            encuentra con quien lo quiere usar. Nosotros los conectamos; el
+            acuerdo lo cierran ustedes.
+          </p>
+
+          <div className="mt-10 grid gap-8 md:grid-cols-2">
+            <div className="rounded-2xl border border-fog-gray dark:border-white/10 p-6">
+              <h3 className="text-lg font-semibold text-carbon-gray dark:text-gray-100">
+                Si tenés algo para licenciar
+              </h3>
+              <ol className="mt-4 space-y-3">
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">1. Publicá el activo.</span>{" "}
+                  Contá qué es, qué tipo de licencia ofrecés y qué usos permitís.
+                </li>
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">2. Recibí solicitudes.</span>{" "}
+                  Quien esté interesado te escribe explicando para qué lo quiere.
+                </li>
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">3. Negociá vos.</span>{" "}
+                  Conversan las condiciones y decidís a quién le decís que sí.
+                </li>
+              </ol>
+            </div>
+
+            <div className="rounded-2xl border border-fog-gray dark:border-white/10 p-6">
+              <h3 className="text-lg font-semibold text-carbon-gray dark:text-gray-100">
+                Si buscás algo para tu proyecto
+              </h3>
+              <ol className="mt-4 space-y-3">
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">1. Explorá el catálogo.</span>{" "}
+                  Filtrá por categoría y por tipo de licencia hasta dar con lo que necesitás.
+                </li>
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">2. Solicitá la licencia.</span>{" "}
+                  Le mandás tu pedido al titular directamente desde la ficha del activo.
+                </li>
+                <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">3. Acuerdan las condiciones.</span>{" "}
+                  Si hay acuerdo, lo cierran entre ustedes con sus propios términos.
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-slate-gray dark:text-gray-500 max-w-2xl mx-auto leading-relaxed">
+            Para que quede claro: la plataforma pone en contacto a las partes y
+            aloja la conversación. No verificamos la titularidad de los activos,
+            no procesamos pagos y no somos parte del contrato que ustedes firmen.
+          </p>
+        </div>
+      </section>
+
       {/* ── NUESTROS PRODUCTOS ───────────────────────────────────────── */}
       <FeaturedByDigitalAxios />
 

@@ -390,7 +390,10 @@ export default async function AssetDetailPage({ params }: PageProps) {
                   {asset.tags.map((tag: string) => (
                     <Link
                       key={tag}
-                      href={`/assets?search=${tag}`}
+                      // El catálogo ya lee `?search=`: esta etiqueta filtra de
+                      // verdad. `encodeURIComponent` no es opcional — una
+                      // etiqueta con espacio o `&` rompía la querystring.
+                      href={`/assets?search=${encodeURIComponent(tag)}`}
                       className="px-3 py-1.5 text-sm bg-snow-gray dark:bg-white/5 border border-fog-gray dark:border-white/10 rounded-full text-carbon-gray dark:text-gray-300 hover:border-electric-blue hover:text-electric-blue transition-all"
                     >
                       #{tag}
