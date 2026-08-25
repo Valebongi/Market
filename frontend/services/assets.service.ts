@@ -9,14 +9,89 @@ import type {
   AssetLinkInput,
 } from "@/types";
 
-export const assetsService = {
-  list: (params?: Record<string, string | number>) => {
-    const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-    return apiFetch<PaginatedResponse<RawAsset>>(`/assets${qs}`, { auth: false });
-  },
+/** Query params de los listados. Se serializan tal cual a la querystring. */
+export type AssetListParams = Record<string, string | number>;
 
-  get: (id: string) =>
-    apiFetch<RawAsset>(`/assets/${id}`, { auth: false }),
+/**
+ * Opciones de caché para las lecturas PÚBLICAS del catálogo.
+ *
+ * Sólo tienen efecto desde un Server Component. `revalidate` en segundos:
+ * la respuesta se sirve del Data Cache de Next hasta que expire, en vez de
+ * pegarle a la API en cada request.
+ *
+ * NO existe en los métodos `manage*` ni en ninguna escritura, y no debe
+ * agregarse: esas respuestas dependen del usuario del token.
+ */
+export interface PublicReadOptions {
+  /** Segundos de vida en el Data Cache. `0` = sin caché. */
+  revalidate?: number | false;
+}
+
+function qs(params?: AssetListParams): string {
+  return params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
+}
+
+function cache(options?: PublicReadOptions) {
+  return options?.revalidate === undefined ? {} : { next: { revalidate: options.revalidate } };
+}
+
+export const assetsService = {
+  /**
+   * `GET /assets` — listado PÚBLICO. El backend fuerza `status: 'published'`;
+   * mandar `?status=draft` no devuelve borradores. Para el listado del titular
+   * con estado real, usar `manageList()`.
+   *
+   * `options.revalidate` sólo aplica desde el servidor. Ej: `list(params, { revalidate: 60 })`.
+   */
+  list: (params?: AssetListParams, options?: PublicReadOptions) =>
+    apiFetch<PaginatedResponse<RawAsset>>(`/assets${qs(params)}`, {
+      auth: false,
+      ...cache(options),
+    }),
+
+  /**
+   * `GET /assets/:id` — detalle PÚBLICO. Sólo activos `published`: un borrador
+   * o un archivado dan 404 acá aunque seas el titular. Incrementa `viewCount`.
+   * Para leer en cualquier estado, `manageGet()`.
+   */
+  get: (id: string, options?: PublicReadOptions) =>
+    apiFetch<RawAsset>(`/assets/${id}`, { auth: false, ...cache(options) }),
+
+  // ── Namespace de gestión (autenticado) ──────────────────────────────
+  //
+  // `GET /assets` y `GET /assets/:id` dejaron de servir borradores: el detalle
+  // público no filtraba por `status` y los borradores de todos los titulares
+  // eran públicos e indexables. La lectura del titular vive ahora acá.
+  //
+  // Van bajo DOS segmentos (`manage/list`, `manage/:id`) a propósito: el
+  // gateway excluye del middleware de auth los patrones `assets` y `assets/:id`,
+  // de un solo segmento. `assets/manage/...` no matchea ninguno, así que el
+  // middleware sí corre, valida el JWT y pisa `x-user-id` con el `sub` del token.
+  //
+  // Ambos van con `auth: true` (el default de `apiFetch`) y por lo tanto sólo
+  // funcionan desde el cliente: el token vive en `localStorage`.
+
+  /**
+   * `GET /assets/manage/list` — listado del titular, con filtro de `status`
+   * REAL. Acepta los mismos query params que `list()`.
+   *
+   * El backend pisa `ownerId` con el del token: un titular sólo ve lo suyo,
+   * pasar `ownerId` ajeno no sirve de nada. Un `admin` sí puede pasar cualquier
+   * `ownerId`, o ninguno para ver todo.
+   *
+   * Respuesta: `{ data, total, page, limit, totalPages }` — mismo shape que `list()`.
+   */
+  manageList: (params?: AssetListParams) =>
+    apiFetch<PaginatedResponse<RawAsset>>(`/assets/manage/list${qs(params)}`, { auth: true }),
+
+  /**
+   * `GET /assets/manage/:id` — detalle en CUALQUIER estado si sos el titular o
+   * un admin; 404 si no. Mismo shape que `get()` (pasar por `mapAsset()`).
+   *
+   * **No incrementa `viewCount`**: abrir el editor no cuenta como visita.
+   */
+  manageGet: (id: string) =>
+    apiFetch<RawAsset>(`/assets/manage/${id}`, { auth: true }),
 
   /**
    * `POST /assets`. El body es `CreateAssetPayload` (modelo de ESCRITURA),

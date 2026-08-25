@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./Providers";
+import { SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,9 +16,6 @@ const poppins = Poppins({
   display: "swap",
   variable: "--font-poppins",
 });
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://davinci-inventa.com";
 
 const DESCRIPTION =
   "La plataforma para intermediar activos intelectuales en Argentina. Conecta titulares con emprendedores para licenciar software, diseños, modelos de negocio y más.";
@@ -79,9 +77,11 @@ export const metadata: Metadata = {
     icon: "/Logo DaVinci.png",
     apple: "/Logo DaVinci.png",
   },
-  alternates: {
-    canonical: SITE_URL,
-  },
+  // SIN `alternates.canonical` a proposito. Un canonical en el layout raiz lo
+  // hereda toda pagina que no declare el suyo, y como el valor es SITE_URL, esa
+  // pagina se autocanonicaliza a la home y no se indexa nunca. Cada pagina
+  // publica declara el suyo; una nueva que se olvide queda sin canonical, que es
+  // recuperable, en vez de apuntando a otra URL, que no lo es.
 };
 
 export default function RootLayout({
@@ -91,10 +91,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
-      <head>
-        {/* Preload del logo: es el LCP candidate en el Navbar (priority ya lo hace, esto refuerza en SSR) */}
-        <link rel="preload" href="/Logo DaVinci.png" as="image" />
-      </head>
       <body className="min-h-screen bg-white dark:bg-[#0d1117] text-carbon-gray dark:text-gray-100 antialiased transition-colors duration-200">
         <Providers>{children}</Providers>
       </body>

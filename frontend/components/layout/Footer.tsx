@@ -1,16 +1,29 @@
 import Link from "next/link";
 
+/**
+ * El footer se renderiza en TODAS las páginas, así que cada entrada rota de acá
+ * es un enlace roto sitewide. Tres salieron por eso:
+ *
+ * - `/help` daba 404. La única ayuda que existe es `/dashboard/help`, que es
+ *   privada y está en `Disallow`. Una página pública de ayuda merece contenido
+ *   propio; hasta que exista, no tener el enlace es mejor que un 404 sitewide.
+ * - `/dashboard/domains` era un enlace público a una ruta `Disallow` que rebota
+ *   al login a cualquier anónimo.
+ * - "Explorar Activos" apuntaba a `/` mientras el navbar apuntaba a `/assets`.
+ *   Dos destinos para el mismo texto de ancla, repetidos en todo el sitio.
+ *
+ * Al agregar una entrada acá: verificar que la ruta exista, que sea pública y
+ * que no esté en `Disallow` de `robots.ts`.
+ */
 const footerLinks = {
   producto: [
-    { href: "/", label: "Explorar Activos" },
+    { href: "/assets", label: "Explorar Activos" },
     { href: "/register", label: "Publicar Activo" },
-    { href: "/dashboard/domains", label: "Buscar Dominios" },
   ],
   soporte: [
     { href: "/#como-funciona", label: "Cómo Funciona" },
     { href: "/terms", label: "Términos y Condiciones" },
     { href: "/privacy", label: "Política de Privacidad" },
-    { href: "/help", label: "Centro de Ayuda" },
   ],
 };
 
