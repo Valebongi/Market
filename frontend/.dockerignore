@@ -1,4 +1,20 @@
 # ══════════════════════════════════════════════════════════════
+# ⚠️ ESTE ARCHIVO YA NO SE APLICA AL BUILD DE PRODUCCIÓN.
+#
+# Desde que el frontend se construye con contexto = RAÍZ del monorepo
+# (`docker build -f frontend/Dockerfile .`), Docker lee el `.dockerignore`
+# de la raíz del CONTEXTO, es decir `<repo>/.dockerignore`. Este archivo
+# queda inerte: editarlo no cambia nada.
+#
+#   → El filtro real está en <repo>/.dockerignore
+#   → El motivo del cambio de contexto, en frontend/Dockerfile y
+#     documentacion/despliegue.md (autodetección de Next.js en Railway).
+#
+# Se conserva solo por si alguien construye a mano desde dentro de
+# `frontend/` con un Dockerfile propio. No lo tomes como fuente de verdad.
+# ══════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════
 # Contexto de build del frontend (Next.js)
 #
 # Sin este archivo, el `COPY . .` del Dockerfile arrastra:

@@ -129,7 +129,8 @@ docker compose logs -f assets-service
 Proyecto Railway: **`vincisale`** (workspace GrowthIMBAR).
 Origen de cada servicio: el repo de GitHub **`Valebongi/Market`**. Railway rebuildea
 en cada push a la rama configurada, construyendo con el `Dockerfile` de cada
-subdirectorio (no con Nixpacks).
+subdirectorio (no con Nixpacks). **Excepción: el `frontend` se construye con el
+contexto en la raíz del repo** — el motivo, en § 3.1.1.
 
 ### 3.1 Núcleo mínimo: 5 servicios + 1 Postgres
 
@@ -142,7 +143,7 @@ Esta etapa despliega **solo** el camino crítico. `users-service`, `messaging-se
 | `gateway` | `backend/gateway` | `Dockerfile` | `8080` | **sí** → es la API |
 | `auth-service` | `backend/auth-service` | `Dockerfile` | `3001` | no (red interna) |
 | `assets-service` | `backend/assets-service` | `Dockerfile` | `3002` | **sí** (ver 3.6) |
-| `frontend` | `frontend` | `Dockerfile` | `3000` | **sí** → es el sitio |
+| `frontend` | **— (raíz del repo)** | `frontend/Dockerfile` | `3000` | **sí** → es el sitio |
 
 > **Seteá `PORT` a mano en cada servicio.** Railway respeta el `PORT` explícito y lo
 > usa como *target port* del dominio público. Si lo dejás que lo detecte, el puerto
@@ -157,6 +158,82 @@ apaga: perfiles de usuario, wishlist/guardados, solicitudes, mensajería,
 notificaciones, dominios y el panel de admin. El registro **sí** funciona:
 `auth-service` llama a `users-service` para crear el perfil dentro de un `try/catch`
 no fatal, así que el usuario se crea igual, sin perfil asociado.
+
+### 3.1.1 Por qué el frontend se construye con contexto = raíz del repo
+
+**No toques esto para "simplificarlo".** La fila `frontend` de la tabla de arriba
+es la única sin *Root Directory*, y es a propósito.
+
+**El hallazgo:** Railway autodetecta Next.js leyendo el `package.json` que esté en
+la **raíz del contexto de build**. Cuando lo detecta, descarta el `Dockerfile` y
+aplica su propio plan de build, que muere **sin emitir una sola línea de
+BuildKit** — no hay log útil, parece un error de infraestructura y no lo es.
+
+Casos mínimos verificados, todos con un `Dockerfile` trivial
+(`FROM node:20-alpine` + `WORKDIR` + `COPY` + `RUN echo`):
+
+| Contexto de build | Resultado |
+|---|---|
+| `package.json` mínimo en la raíz del contexto | ✅ Deploy complete |
+| Los 23 paquetes del frontend **sin** `next` | ✅ Deploy complete |
+| **Solo** `next` en `dependencies`, en la raíz del contexto | ❌ Deploy failed |
+| `package.json` con `next` en un **subdirectorio** (`frontend/package.json`), Dockerfile en la raíz | ✅ **Deploy complete** |
+
+O sea: el disparador es exactamente la presencia de `next` en el `package.json`
+de la raíz del contexto. La solución es correr ese `package.json` un nivel hacia
+abajo, y eso se consigue moviendo el **contexto**, no el código.
+
+**Workarounds que NO funcionan** (probados, no gastes tiempo de nuevo):
+
+- `RAILWAY_DOCKERFILE_PATH=Dockerfile` como variable del servicio.
+- Un `railway.json` con `"builder": "DOCKERFILE"`.
+
+Ninguno de los dos evita la autodetección.
+
+**La configuración resultante:**
+
+- En Railway, el servicio `frontend` va **sin Root Directory** → el contexto es la
+  raíz del repo clonado, y `frontend/package.json` queda en un subdirectorio.
+- `frontend/Dockerfile` tiene todos los `COPY` prefijados con `frontend/`
+  (`COPY frontend/package*.json ./`, `COPY frontend/ ./`). El `WORKDIR` interno
+  sigue siendo `/app`: lo único que cambió es el lado izquierdo de los `COPY`.
+  Los `COPY --from=builder` no cambian: sus rutas son internas a la imagen.
+- El filtro del contexto es **`<repo>/.dockerignore`**, el de la raíz.
+  `frontend/.dockerignore` ya **no se lee** (Docker toma el `.dockerignore` de la
+  raíz del contexto); se conserva con una cabecera que lo aclara, pero editarlo
+  no cambia nada.
+- `docker-compose.yml` usa `context: .` + `dockerfile: frontend/Dockerfile` para
+  que el build local sea idéntico al de Railway.
+
+**Construir la imagen a mano** — siempre **desde la raíz del repo**:
+
+```bash
+# ✅ correcto (el punto final es el contexto: la raíz)
+docker build -f frontend/Dockerfile   --build-arg NEXT_PUBLIC_API_URL=https://api.tu-dominio.com/api/v1   --build-arg NEXT_PUBLIC_SITE_URL=https://tu-dominio.com   -t davinci-frontend .
+
+# ❌ rompe: el contexto es ./frontend y los COPY buscan frontend/frontend/...
+docker build -t davinci-frontend ./frontend
+
+# vía compose (ya trae el contexto correcto)
+docker compose build frontend
+```
+
+**Sobre el `.dockerignore` de la raíz.** Con el contexto en la raíz, sin él se
+empaquetan los `node_modules` de los siete servicios, `.next`, `.git`, `Market/`
+(repo embebido), los PNG de `documentacion/` y — lo grave — los `.env` reales.
+Está escrito con patrones `**/…` (independientes de la profundidad) a propósito:
+los patrones anclados a un prefijo, tipo `frontend/.next/`, dejan de coincidir
+apenas cambia la raíz del contexto. Ya nos mordió una vez y se colaron ~200MB.
+
+**Los Dockerfile de backend NO cambian.** Cada servicio se sigue construyendo con
+*Root Directory* en su propio subdirectorio y su propio `.dockerignore`. Ninguno
+tiene `next` en su `package.json`, así que no disparan la autodetección y ya
+despliegan bien. No hay motivo para tocarlos.
+
+**Esto también alinea con el despliegue desde GitHub**, que es a donde vamos:
+Railway clona el repo y, sin *Root Directory* configurado, el contexto ya es la
+raíz. La misma solución sirve para los dos caminos y no hay que tocar el
+dashboard.
 
 ### 3.2 Una sola instancia de Postgres, seis bases
 
@@ -749,8 +826,11 @@ rutas públicas y las de auth, que son las que importan, sí pasan por el thrott
 - [ ] Verificado en el browser (DevTools → Network): los XHR **no** salen a `localhost:8080`
 - [ ] `GITHUB_CLIENT_SECRET` seteado como variable de runtime del frontend, **nunca** como build arg
 - [ ] Callback URLs de Google/GitHub actualizadas al dominio de producción
-- [ ] Existe `.dockerignore` en `frontend/` y en cada `backend/<servicio>/`
-      (sin él, el `COPY . .` mete `.env.local` con secretos reales en la imagen)
+- [ ] Existe `.dockerignore` en la **raíz del repo** (contexto del build del frontend,
+      ver § 3.1.1) y en cada `backend/<servicio>/` — sin él, el `COPY` mete
+      `frontend/.env.local` con secretos reales en la imagen
+- [ ] El `.dockerignore` de la raíz excluye `**/.env` y `**/.env.*` y solo reincluye
+      los `*.example`
 - [ ] Certificado SSL/TLS activo en el servidor (Let's Encrypt o similar)
 - [ ] Puertos internos de microservicios (3001-3006) no expuestos públicamente (solo el gateway en 8080)
 - [ ] Reverse proxy (nginx/Caddy) enfrente del gateway

@@ -1,0 +1,86 @@
+# ══════════════════════════════════════════════════════════════════════════
+# Contexto de build de la RAÍZ del monorepo.
+#
+# Lo usa `docker build -f frontend/Dockerfile .` (y Railway al clonar el repo
+# sin "Root Directory"). El frontend se construye con contexto = raíz a
+# propósito: si el `package.json` con `next` queda en la raíz del contexto,
+# Railway autodetecta Next.js, ignora el Dockerfile y el build falla.
+# Ver frontend/Dockerfile y documentacion/despliegue.md.
+#
+# Como el contexto es la raíz, este archivo tiene que sacar TODO el monorepo
+# menos `frontend/`. Sin él se empaquetan cientos de MB (node_modules de 7
+# servicios, .next, .git, PNGs de documentación) y, peor, `.env` reales.
+#
+# ⚠️ Regla de oro: usar patrones `**/…` (independientes de la profundidad) para
+# lo que puede aparecer en cualquier nivel. Los patrones anclados a un prefijo
+# (`frontend/.next/`) dejan de coincidir si alguien vuelve a mover la raíz del
+# contexto — ya nos pasó, y se colaron ~200MB de `.next`.
+#
+# Los Dockerfiles de backend NO usan este archivo: cada uno se construye con
+# contexto en su propio subdirectorio y su propio .dockerignore.
+# ══════════════════════════════════════════════════════════════════════════
+
+# ── Otros paquetes del monorepo (el build del frontend no los necesita) ──
+backend/
+Market/
+scripts/
+documentacion/
+.agents/
+.claude/
+.github/
+
+# ── Docs y utilidades de la raíz ──
+*.md
+!frontend/**/*.md
+docker-compose.yml
+*.ps1
+skills-lock.json
+.gitattributes
+.nvmrc
+nul
+
+# ── Dependencias y artefactos de build (se regeneran dentro de la imagen) ──
+# `**/` para que valgan a cualquier profundidad, no solo en frontend/.
+**/node_modules
+**/.next
+**/out
+**/.turbo
+**/.vercel
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# ── Variables de entorno — NUNCA entran a la imagen ──
+# frontend/.env.local tiene GITHUB_CLIENT_SECRET real y además
+# NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1, que Next hornearía en los
+# chunks del cliente y rompería producción.
+# Los NEXT_PUBLIC_* de producción llegan por --build-arg (ver Dockerfile) y los
+# secretos de runtime por env del contenedor.
+**/.env
+**/.env.*
+!frontend/.env.example
+!frontend/.env.local.example
+
+# ── Git ──
+.git
+**/.gitignore
+
+# ── Docker (el Dockerfile lo lee BuildKit aparte, no hace falta en el contexto) ──
+**/Dockerfile
+**/.dockerignore
+
+# ── Editores y OS ──
+**/.vscode
+**/.idea
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini
+**/*.swp
+**/*.swo
+
+# ── Logs, tests y temporales ──
+**/*.log
+**/npm-debug.log*
+**/yarn-error.log*
+**/coverage
+**/.nyc_output
+**/*.tmp

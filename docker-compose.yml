@@ -224,8 +224,14 @@ services:
   # ─────────────────────── Frontend ───────────────────────
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # ⚠️ El contexto es la RAÍZ del monorepo, no ./frontend.
+      # Railway autodetecta Next.js si encuentra `next` en el package.json de la
+      # raíz del contexto, descarta el Dockerfile y el build falla. Con el
+      # contexto en la raíz, ese package.json queda en frontend/ y no se dispara.
+      # El filtrado del contexto lo hace <repo>/.dockerignore.
+      # Ver documentacion/despliegue.md § 3.1.1.
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         # ── BUILD-TIME ────────────────────────────────────────────────────
         # Next.js hornea estos valores en los chunks del cliente durante el

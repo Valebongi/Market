@@ -1,13 +1,31 @@
 # ══════════════════════════════════════════════════════════════════════════
 # Frontend — Next.js 15 (output: "standalone", ver next.config.ts)
+#
+# ⚠️ EL CONTEXTO DE BUILD ES LA RAÍZ DEL MONOREPO, NO `frontend/`.
+#
+#     docker build -f frontend/Dockerfile -t davinci-frontend .     ← desde la raíz
+#     docker build -t davinci-frontend ./frontend                   ← ROMPE
+#
+# Por qué: Railway autodetecta Next.js leyendo el `package.json` que esté en la
+# RAÍZ del contexto de build. Si ahí encuentra `next` en `dependencies`, descarta
+# este Dockerfile y aplica su propio plan de build, que falla sin emitir una sola
+# línea de BuildKit. Con el contexto en la raíz del repo, el `package.json` de
+# Next queda en el subdirectorio `frontend/` y la autodetección no se dispara.
+# (Detalle completo del hallazgo y de los workarounds descartados —
+#  RAILWAY_DOCKERFILE_PATH y railway.json — en documentacion/despliegue.md.)
+#
+# Consecuencia práctica: el lado IZQUIERDO de cada `COPY` va prefijado con
+# `frontend/`. El `WORKDIR` interno sigue siendo `/app`.
+# El filtrado del contexto lo hace el `.dockerignore` DE LA RAÍZ del repo
+# (`frontend/.dockerignore` ya NO se lee con este contexto).
 # ══════════════════════════════════════════════════════════════════════════
 
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ ./
 
 # ──────────────────────────────────────────────────────────────────────────
 # Variables BUILD-TIME.
@@ -68,6 +86,8 @@ ENV HOSTNAME=0.0.0.0
 # Variables de RUNTIME (no se declaran acá, se pasan como env del contenedor):
 #   GITHUB_CLIENT_SECRET  → app/api/auth/github/callback/route.ts
 
+# Estos COPY salen del stage `builder`, NO del contexto: sus rutas son internas
+# a la imagen (/app/...) y no cambian con el contexto de build.
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public

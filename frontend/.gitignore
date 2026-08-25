@@ -1,0 +1,18 @@
+# Artefactos de build de Next.js.
+#
+# El .gitignore de la raíz ya los cubre con rutas ancladas (frontend/.next/),
+# pero esas rutas dejan de coincidir cuando se sube este directorio como raíz
+# de contexto (railway up ./frontend --path-as-root): ahí las rutas son
+# relativas a frontend/, y sin este archivo se empaquetan ~200MB de .next.
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Dependencias
+node_modules/
+
+# Variables de entorno con secretos reales
+.env
+.env.local
+.env*.local
