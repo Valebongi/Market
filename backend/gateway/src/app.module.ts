@@ -43,7 +43,12 @@ export class AppModule implements NestModule {
         // Auth routes (handled by auth-service)
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/login', method: RequestMethod.POST },
-        { path: 'auth/oauth/callback', method: RequestMethod.POST },
+        // NO agregar 'auth/oauth/callback' acá: no es un olvido, es intencional.
+        // El endpoint recibe `email` y `providerId` como datos crudos del cliente y
+        // auth-service confía en ellos para emitir un accessToken, así que exponerlo
+        // sin JWT permite tomar cualquier cuenta conociendo solo el email.
+        // Se reabre recién cuando el intercambio del `code` de OAuth se haga
+        // server-side dentro de auth-service.
         { path: 'auth/forgot-password', method: RequestMethod.POST },
         { path: 'auth/reset-password', method: RequestMethod.POST },
         // Public user profiles (any visitor can view a user's public profile)

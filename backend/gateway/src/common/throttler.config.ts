@@ -11,6 +11,7 @@ export const AUTH_SENSITIVE_PATHS = [
   '/api/v1/auth/register',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
+  '/api/v1/auth/oauth/callback',
 ];
 
 /** Path sin query string, robusto ante middlewares que reescriben `req.url`. */
