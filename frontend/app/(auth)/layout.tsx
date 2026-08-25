@@ -30,7 +30,7 @@ export default function AuthLayout({
       </main>
 
       {/* Footer */}
-      <footer className="py-4 text-center text-xs text-slate-gray border-t border-fog-gray bg-white">
+      <footer className="py-4 text-center text-xs text-slate-gray dark:text-gray-500 border-t border-fog-gray dark:border-white/10 bg-white dark:bg-gray-900">
         © {new Date().getFullYear()} Da Vinci Inventa ·{" "}
         <Link href="/terms" className="hover:text-electric-blue">
           Términos

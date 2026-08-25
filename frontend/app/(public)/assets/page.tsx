@@ -4,17 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import AssetCard from "@/components/assets/AssetCard";
 import { AssetCardSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import type { Asset } from "@/types";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
-
-const CATEGORIES = [
-  { slug: "software", label: "Software y Apps" },
-  { slug: "brand", label: "Marca y Branding" },
-  { slug: "design", label: "Diseño" },
-  { slug: "business_model", label: "Modelo de Negocio" },
-  { slug: "content", label: "Contenido Digital" },
-  { slug: "other", label: "Otro" },
-];
+// Fuente única de verdad. Redeclarar la lista acá fue lo que dejó `project`
+// fuera del filtro y volvió invisibles los activos de esa categoría.
+import { ASSET_CATEGORIES } from "@/lib/asset-categories";
 
 const LICENSE_TYPES = [
   { value: "all", label: "Todas" },
@@ -36,6 +31,7 @@ export default function AssetsPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [licenseType, setLicenseType] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
+  const [loadError, setLoadError] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -45,6 +41,7 @@ export default function AssetsPage() {
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const params: Record<string, string | number> = {
         page,
@@ -61,7 +58,10 @@ export default function AssetsPage() {
       setTotal(res.total || 0);
       setTotalPages(res.totalPages || 1);
     } catch {
+      // Sin esto un gateway caído se ve exactamente igual que un catálogo vacío.
       setAssets([]);
+      setTotal(0);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -85,6 +85,14 @@ export default function AssetsPage() {
     setSortBy("createdAt");
     setPage(1);
   };
+
+  /**
+   * Distingue "el filtro no devolvió nada" de "el catálogo está vacío".
+   * Usa `debouncedSearch` y no `search` para que el copy del estado vacío no
+   * cambie mientras el usuario todavía está tipeando.
+   */
+  const hasFilters =
+    !!debouncedSearch || selectedCategories.length > 0 || licenseType !== "all";
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0d1117]">
@@ -125,15 +133,15 @@ export default function AssetsPage() {
                   Categorías
                 </h3>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {CATEGORIES.map((cat) => (
+                  {ASSET_CATEGORIES.map((cat) => (
                     <label
-                      key={cat.slug}
+                      key={cat.value}
                       className="flex items-center gap-2.5 cursor-pointer group"
                     >
                       <input
                         type="checkbox"
-                        checked={selectedCategories.includes(cat.slug)}
-                        onChange={() => toggleCategory(cat.slug)}
+                        checked={selectedCategories.includes(cat.value)}
+                        onChange={() => toggleCategory(cat.value)}
                         className="w-4 h-4 rounded border-fog-gray text-electric-blue focus:ring-electric-blue"
                       />
                       <span className="text-sm text-slate-gray dark:text-gray-400 group-hover:text-carbon-gray dark:group-hover:text-gray-200 transition-colors">
@@ -212,15 +220,33 @@ export default function AssetsPage() {
                   <AssetCardSkeleton key={i} />
                 ))}
               </div>
+            ) : loadError ? (
+              <EmptyState
+                size="lg"
+                iconStyle="bare"
+                icon="⚠️"
+                title="No pudimos cargar el catálogo"
+                description="Hubo un problema de conexión con el servidor. Probá de nuevo en unos segundos."
+                action={{ label: "Reintentar", onClick: fetchAssets, variant: "link" }}
+              />
+            ) : assets.length === 0 && hasFilters ? (
+              <EmptyState
+                size="lg"
+                iconStyle="bare"
+                icon="🔍"
+                title="No encontramos activos con esos filtros"
+                description="Probá con otros términos de búsqueda o quitá alguno de los filtros aplicados."
+                action={{ label: "Limpiar filtros", onClick: clearFilters, variant: "link" }}
+              />
             ) : assets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <p className="text-4xl mb-4">🔍</p>
-                <h3 className="text-xl font-semibold text-carbon-gray dark:text-gray-100">No encontramos activos</h3>
-                <p className="text-sm text-slate-gray dark:text-gray-400 mt-2">Intentá con otros filtros o términos de búsqueda.</p>
-                <button onClick={clearFilters} className="mt-4 text-sm text-electric-blue hover:underline">
-                  Limpiar filtros
-                </button>
-              </div>
+              <EmptyState
+                size="lg"
+                iconStyle="bare"
+                icon="🌱"
+                title="Todavía no hay activos publicados"
+                description="El catálogo está arrancando. Si tenés un activo intelectual para licenciar, podés ser el primero en publicarlo."
+                action={{ label: "Publicar mi activo", href: "/register" }}
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {assets.map((asset) => (

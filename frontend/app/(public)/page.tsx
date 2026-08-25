@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import LandingMarketplace from "./_components/LandingMarketplace";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://davinci-inventa.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 const DESCRIPTION =
   "Marketplace de activos intelectuales en Argentina. Software, diseños, marcas y modelos de negocio listos para licenciar. Conectá con titulares y hacé crecer tu proyecto.";
 
 export const metadata: Metadata = {
-  title: "Da Vinci Inventa – Marketplace de Licencias",
+  // `absolute` evita que el template "%s | Da Vinci Inventa" del root layout
+  // duplique la marca: sin esto el <title> sale
+  // "Da Vinci Inventa – Marketplace de Licencias | Da Vinci Inventa".
+  title: { absolute: "Da Vinci Inventa – Marketplace de Licencias" },
   description: DESCRIPTION,
   alternates: { canonical: SITE_URL },
   openGraph: {

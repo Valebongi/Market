@@ -56,7 +56,7 @@ async function fetchAsset(id: string): Promise<RawAsset> {
 }
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://davinci-inventa.com";
+  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
@@ -114,6 +114,17 @@ export default async function AssetDetailPage({ params }: PageProps) {
     { label: "Precio Estimado", value: priceDisplay },
   ];
 
+  /**
+   * JSON-LD del activo.
+   *
+   * Da Vinci Inventa intermedia el contacto entre el titular y el interesado:
+   * no vende, no cobra y no tiene inventario. Por eso el markup NO declara
+   * `seller: Da Vinci Inventa`, `brand: Da Vinci Inventa` ni
+   * `availability: InStock` — los tres le afirmaban a Google cosas que el
+   * producto no hace (que la plataforma es la vendedora, que la marca del
+   * activo es nuestra y que hay stock comprable). El precio va como precio
+   * pedido por el titular, que es lo que efectivamente es.
+   */
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -121,20 +132,23 @@ export default async function AssetDetailPage({ params }: PageProps) {
     description: asset.description.slice(0, 500),
     url: `${SITE_URL}/assets/${asset.id}`,
     image: asset.previewUrls?.[0] ?? `${SITE_URL}/Logo DaVinci.png`,
-    brand: { "@type": "Organization", name: "Da Vinci Inventa" },
+    category:
+      ASSET_TYPE_LABELS[asset.assetType as keyof typeof ASSET_TYPE_LABELS] ||
+      asset.assetType,
     offers: {
       "@type": "Offer",
+      url: `${SITE_URL}/assets/${asset.id}`,
       priceCurrency: asset.priceCurrency || "USD",
       price:
-        asset.priceType === "fixed" && asset.priceFixed != null
-          ? asset.priceFixed
-          : undefined,
+        asset.priceType === "free"
+          ? 0
+          : asset.priceType === "fixed" && asset.priceFixed != null
+            ? asset.priceFixed
+            : undefined,
       priceSpecification:
         asset.priceType === "negotiable"
           ? { "@type": "PriceSpecification", description: "A consultar" }
           : undefined,
-      availability: "https://schema.org/InStock",
-      seller: { "@type": "Organization", name: "Da Vinci Inventa" },
     },
   };
 

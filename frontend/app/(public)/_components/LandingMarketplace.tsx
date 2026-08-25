@@ -5,19 +5,30 @@ import { Search, X, ChevronDown, ArrowRight, Upload } from "lucide-react";
 import Link from "next/link";
 import AssetCard from "@/components/assets/AssetCard";
 import { AssetCardSkeleton } from "@/components/ui/Skeleton";
-import type { Asset } from "@/types";
+import EmptyState from "@/components/ui/EmptyState";
+import type { Asset, AssetCategory } from "@/types";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 import { cn } from "@/lib/utils";
+// Fuente única de verdad. Redeclarar la lista acá fue lo que dejó `project`
+// fuera de los chips y volvió invisibles los activos de esa categoría.
+import { ASSET_CATEGORIES, getAssetCategoryLabel } from "@/lib/asset-categories";
 import FeaturedByDigitalAxios from "@/components/landing/FeaturedByDigitalAxios";
 
-const CATEGORIES = [
-  { slug: "software",       label: "Software y Apps",      color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" },
-  { slug: "design",         label: "Diseño",               color: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100" },
-  { slug: "brand",          label: "Marca y Branding",     color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100" },
-  { slug: "business_model", label: "Modelos de Negocio",   color: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" },
-  { slug: "content",        label: "Contenido Digital",    color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
-  { slug: "other",          label: "Otros",                color: "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100" },
-];
+/**
+ * Sólo el color de cada chip vive acá: los `value` y los labels salen de
+ * `ASSET_CATEGORIES`. Al tiparlo como `Record<AssetCategory, string>`, agregar
+ * una categoría nueva sin darle color rompe el build en vez de renderizar un
+ * chip sin estilo.
+ */
+const CATEGORY_CHIP_COLORS: Record<AssetCategory, string> = {
+  software:       "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
+  design:         "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100",
+  brand:          "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100",
+  business_model: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+  content:        "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
+  project:        "bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100",
+  other:          "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100",
+};
 
 const SORT_OPTIONS = [
   { value: "createdAt",    label: "Más recientes" },
@@ -45,6 +56,7 @@ export default function LandingMarketplace() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [licenseType, setLicenseType] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
+  const [loadError, setLoadError] = useState(false);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +67,7 @@ export default function LandingMarketplace() {
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const params: Record<string, string | number> = { page, limit: 12, sortBy, sortOrder: "desc" };
       if (debouncedSearch) params.search = debouncedSearch;
@@ -66,7 +79,10 @@ export default function LandingMarketplace() {
       setTotal(res.total || 0);
       setTotalPages(res.totalPages || 1);
     } catch {
+      // Sin esto un gateway caído se ve exactamente igual que un catálogo vacío.
       setAssets([]);
+      setTotal(0);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -84,7 +100,13 @@ export default function LandingMarketplace() {
     setSearch(""); setSelectedCategory(""); setLicenseType("all"); setSortBy("createdAt"); setPage(1);
   };
 
-  const hasFilters = !!selectedCategory || licenseType !== "all" || !!search;
+  /**
+   * Distingue "el filtro no devolvió nada" de "el catálogo está vacío".
+   * Usa `debouncedSearch` y no `search` para que el copy del estado vacío no
+   * cambie mientras el usuario todavía está tipeando.
+   */
+  const hasFilters =
+    !!selectedCategory || licenseType !== "all" || !!debouncedSearch;
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0d1117]">
@@ -141,15 +163,15 @@ export default function LandingMarketplace() {
 
           {/* Category chips */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {CATEGORIES.map((cat) => (
+            {ASSET_CATEGORIES.map((cat) => (
               <button
-                key={cat.slug}
-                onClick={() => handleCategoryClick(cat.slug)}
+                key={cat.value}
+                onClick={() => handleCategoryClick(cat.value)}
                 className={cn(
                   "px-4 py-2 rounded-full text-sm font-medium border transition-all",
-                  selectedCategory === cat.slug
+                  selectedCategory === cat.value
                     ? "bg-electric-blue text-white border-electric-blue shadow-sm"
-                    : `${cat.color} dark:bg-white/5 dark:text-gray-300 dark:border-white/10 dark:hover:bg-white/10`
+                    : `${CATEGORY_CHIP_COLORS[cat.value]} dark:bg-white/5 dark:text-gray-300 dark:border-white/10 dark:hover:bg-white/10`
                 )}
               >
                 {cat.label}
@@ -215,7 +237,7 @@ export default function LandingMarketplace() {
           <div className="flex items-center gap-2 mb-5">
             <span className="text-sm text-slate-gray dark:text-gray-400">Categoría:</span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-electric-blue/10 text-electric-blue border border-electric-blue/20">
-              {CATEGORIES.find((c) => c.slug === selectedCategory)?.label}
+              {getAssetCategoryLabel(selectedCategory)}
               <button onClick={() => { setSelectedCategory(""); setPage(1); }} className="hover:text-soft-coral transition-colors">
                 <X className="h-3 w-3" />
               </button>
@@ -228,17 +250,33 @@ export default function LandingMarketplace() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
             {Array.from({ length: 12 }).map((_, i) => <AssetCardSkeleton key={i} />)}
           </div>
+        ) : loadError ? (
+          <EmptyState
+            size="lg"
+            iconStyle="bare"
+            icon="⚠️"
+            title="No pudimos cargar el catálogo"
+            description="Hubo un problema de conexión con el servidor. Probá de nuevo en unos segundos."
+            action={{ label: "Reintentar", onClick: fetchAssets, variant: "link" }}
+          />
+        ) : assets.length === 0 && hasFilters ? (
+          <EmptyState
+            size="lg"
+            iconStyle="bare"
+            icon="🔍"
+            title="No encontramos activos con esos filtros"
+            description="Probá con otros términos de búsqueda o eliminá los filtros activos."
+            action={{ label: "Ver todos los activos", onClick: clearFilters, variant: "link" }}
+          />
         ) : assets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-5xl mb-5">🔍</p>
-            <h3 className="text-xl font-semibold text-carbon-gray dark:text-gray-100">No encontramos activos</h3>
-            <p className="text-sm text-slate-gray dark:text-gray-400 mt-2 max-w-xs">
-              Intentá con otros términos de búsqueda o eliminá los filtros activos.
-            </p>
-            <button onClick={clearFilters} className="mt-5 text-sm text-electric-blue hover:underline">
-              Ver todos los activos
-            </button>
-          </div>
+          <EmptyState
+            size="lg"
+            iconStyle="bare"
+            icon="🌱"
+            title="Todavía no hay activos publicados"
+            description="El catálogo está arrancando. Si tenés un activo intelectual para licenciar, podés ser el primero en publicarlo."
+            action={{ label: "Publicar mi activo", href: "/register", variant: "link" }}
+          />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
             {assets.map((asset) => <AssetCard key={asset.id} asset={asset} />)}

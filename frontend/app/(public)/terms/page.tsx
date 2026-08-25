@@ -1,8 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata = {
-  title: "Términos y Condiciones | Da Vinci Inventa",
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
+
+export const metadata: Metadata = {
+  title: "Términos y Condiciones",
   description: "Términos y condiciones de uso de la plataforma Da Vinci Inventa.",
+  alternates: { canonical: `${SITE_URL}/terms` },
+  openGraph: {
+    title: "Términos y Condiciones | Da Vinci Inventa",
+    description: "Términos y condiciones de uso de la plataforma Da Vinci Inventa.",
+    url: `${SITE_URL}/terms`,
+    type: "website",
+  },
 };
 
 export default function TermsPage() {
@@ -107,8 +118,8 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold mb-3">10. Contacto</h2>
             <p className="text-slate-gray dark:text-gray-400 leading-relaxed">
               Para consultas sobre estos términos, podés contactarnos en{" "}
-              <a href="mailto:legal@davinci-inventa.com" className="text-electric-blue hover:underline">
-                legal@davinci-inventa.com
+              <a href="mailto:legal@vinciinventa.com" className="text-electric-blue hover:underline">
+                legal@vinciinventa.com
               </a>
             </p>
           </section>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://davinci-inventa.com";
+  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 
 export const metadata: Metadata = {
   title: "Explorar Activos",

@@ -1,8 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata = {
-  title: "Política de Privacidad | Da Vinci Inventa",
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
+
+export const metadata: Metadata = {
+  title: "Política de Privacidad",
   description: "Política de privacidad y tratamiento de datos personales de Da Vinci Inventa.",
+  alternates: { canonical: `${SITE_URL}/privacy` },
+  openGraph: {
+    title: "Política de Privacidad | Da Vinci Inventa",
+    description: "Política de privacidad y tratamiento de datos personales de Da Vinci Inventa.",
+    url: `${SITE_URL}/privacy`,
+    type: "website",
+  },
 };
 
 export default function PrivacyPage() {
@@ -115,8 +126,8 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold mb-3">10. Contacto</h2>
             <p className="text-slate-gray dark:text-gray-400 leading-relaxed">
               Para ejercer tus derechos o consultas sobre privacidad, contactanos en{" "}
-              <a href="mailto:privacidad@davinci-inventa.com" className="text-electric-blue hover:underline">
-                privacidad@davinci-inventa.com
+              <a href="mailto:privacidad@vinciinventa.com" className="text-electric-blue hover:underline">
+                privacidad@vinciinventa.com
               </a>
             </p>
           </section>
