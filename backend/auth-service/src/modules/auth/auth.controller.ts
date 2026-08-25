@@ -12,6 +12,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { OAuthCallbackDto } from './dto/oauth-callback.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -65,15 +66,7 @@ export class AuthController {
 
   @Post('oauth/callback')
   @HttpCode(HttpStatus.OK)
-  async oauthCallback(
-    @Body()
-    body: {
-      provider: string;
-      providerId: string;
-      email: string;
-      name: string;
-    },
-  ) {
+  async oauthCallback(@Body() body: OAuthCallbackDto) {
     const result = await this.authService.oauthLogin(
       body.provider,
       body.providerId,

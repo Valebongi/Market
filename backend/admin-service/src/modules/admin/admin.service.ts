@@ -52,8 +52,12 @@ export class AdminService {
     closedRequests: number;
     totalViews: number;
   }) {
+    // setUTCHours, no setHours. La columna `date` es `@db.Date` y Prisma la
+    // serializa en UTC: con `setHours` la medianoche LOCAL de un contenedor en
+    // UTC+X cae el día anterior en UTC y el upsert pisa el snapshot equivocado.
+    // En Railway (UTC) el resultado es idéntico; en cualquier otra TZ, no.
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     return this.prisma.metricSnapshot.upsert({
       where: { date: today },
@@ -65,7 +69,8 @@ export class AdminService {
   async getMetrics(range: '7d' | '30d' | '90d' | '365d' = '30d') {
     const days = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 }[range];
     const since = new Date();
-    since.setDate(since.getDate() - days);
+    since.setUTCDate(since.getUTCDate() - days);
+    since.setUTCHours(0, 0, 0, 0);
 
     const snapshots = await this.prisma.metricSnapshot.findMany({
       where: { date: { gte: since } },

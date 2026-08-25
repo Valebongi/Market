@@ -1,4 +1,4 @@
-import { IsOptional, IsEnum, IsString, IsNumber, Min, IsInt } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsNumber, Min, Max, IsInt, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class FilterAssetsDto {
@@ -38,8 +38,14 @@ export class FilterAssetsDto {
   @Type(() => Number)
   maxPrice?: number;
 
+  /**
+   * Whitelist explicita: `sortBy` se interpola directo en el `orderBy` de Prisma
+   * (`orderBy: { [sortBy]: sortOrder }`). Sin esto, cualquier string que no sea un
+   * campo escalar de Asset hace que Prisma tire y el endpoint publico responda 500
+   * en vez de 400. Solo se exponen los campos por los que el frontend ordena hoy.
+   */
   @IsOptional()
-  @IsString()
+  @IsIn(['createdAt', 'updatedAt', 'publishedAt', 'viewCount', 'requestCount', 'price', 'title'])
   sortBy?: string;
 
   @IsOptional()
@@ -52,9 +58,16 @@ export class FilterAssetsDto {
   @Type(() => Number)
   page?: number;
 
+  /**
+   * Tope duro. `limit` va directo al `take` de Prisma: sin `@Max`, un
+   * `GET /assets?limit=999999` anonimo (la ruta no pasa por auth en el gateway)
+   * baja la tabla entera con sus tags y links. 100 es el maximo que usa el
+   * frontend hoy (dashboard de activos del titular).
+   */
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   @Type(() => Number)
   limit?: number;
 }

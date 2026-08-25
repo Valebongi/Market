@@ -59,6 +59,14 @@ model Asset {
   links       AssetLink[]
   flags       AssetFlag[]
 
+  // Indices de lectura. Postgres NO crea indices para claves foraneas ni para
+  // las columnas que se filtran: sin estos, cada listado publico es un seq scan.
+  //   [status, deletedAt, createdAt] -> GET /assets (deleted_at IS NULL + status + orden por fecha)
+  //   [ownerId, status]              -> dashboard del titular (mis activos por estado)
+  //   [category]                     -> filtro por categoria del marketplace
+  @@index([status, deletedAt, createdAt])
+  @@index([ownerId, status])
+  @@index([category])
   @@map("assets")
 }
 
@@ -69,6 +77,7 @@ model AssetTag {
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
+  @@index([assetId])
   @@map("asset_tags")
 }
 
@@ -83,6 +92,7 @@ model AssetAttachment {
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
+  @@index([assetId])
   @@map("asset_attachments")
 }
 
@@ -95,6 +105,7 @@ model AssetLink {
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
+  @@index([assetId])
   @@map("asset_links")
 }
 
@@ -108,5 +119,7 @@ model AssetFlag {
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
+  // El conteo de flags sin resolver filtra por (asset_id, resolved).
+  @@index([assetId, resolved])
   @@map("asset_flags")
 }

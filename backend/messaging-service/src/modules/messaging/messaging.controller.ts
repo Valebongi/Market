@@ -9,8 +9,10 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { MessagingService } from './messaging.service';
+import { UserContextGuard, AdminGuard } from '../../common/user-context.guard';
 import {
   CreateRequestDto,
   SendMessageDto,
@@ -18,6 +20,7 @@ import {
 } from './dto/create-request.dto';
 
 @Controller('requests')
+@UseGuards(UserContextGuard)
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
 
@@ -30,8 +33,14 @@ export class MessagingController {
     return this.messagingService.createRequest(userId, dto);
   }
 
-  // Admin: get all requests
+  // Admin: get all requests.
+  // AdminGuard es OBLIGATORIO acá: este endpoint devuelve TODA solicitud de la
+  // plataforma, con initialMessage, proposedTerms y el último mensaje del hilo.
+  // El gateway no lo protege (sus ADMIN_ROUTE_PREFIXES/ADMIN_EXACT_ROUTES solo
+  // cubren /api/v1/admin y /api/v1/users), así que
+  // sin este guard cualquier usuario logueado se lleva las negociaciones ajenas.
   @Get('all')
+  @UseGuards(AdminGuard)
   findAll(
     @Query('status') status?: string,
     @Query('page') page?: number,

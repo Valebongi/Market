@@ -182,6 +182,18 @@ export class MessagingService {
 
     if (!request) throw new NotFoundException('Request not found');
 
+    // `closed` y `rejected` son ESTADOS TERMINALES. Sin este chequeo el titular
+    // podía reabrir una negociación ya cerrada (closed -> accepted), lo que
+    // reescribe el registro del cierre declarado y le vuelve a abrir el hilo a
+    // la contraparte sin su intervención.
+    if (request.status === 'closed' || request.status === 'rejected') {
+      throw new ConflictException('Esta solicitud ya está cerrada y no admite cambios de estado');
+    }
+
+    if (request.status === dto.status) {
+      throw new ConflictException(`La solicitud ya está en estado "${dto.status}"`);
+    }
+
     // Only owner can accept/reject; both parties can close
     if ((dto.status === 'accepted' || dto.status === 'rejected') && request.ownerId !== userId) {
       throw new ForbiddenException('Only the asset owner can accept or reject requests');
@@ -266,7 +278,10 @@ export class MessagingService {
     const safePage = Math.max(1, parseInt(filters.page) || 1);
     const safeLimit = Math.min(Math.max(1, parseInt(filters.limit) || 20), 100);
     const where: any = { deletedAt: null };
-    if (status) where.status = status;
+    // Un `status` arbitrario reventaba como error de enum de Prisma (500).
+    if (status && ['pending', 'accepted', 'rejected', 'closed'].includes(status)) {
+      where.status = status;
+    }
 
     const skip = (safePage - 1) * safeLimit;
 

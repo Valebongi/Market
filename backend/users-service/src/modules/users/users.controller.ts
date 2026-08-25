@@ -18,7 +18,17 @@ import {
   UpdateNotificationSettingsDto,
   UpdateStatusDto,
 } from './dto/update-profile.dto';
+import { CreateProfileDto } from './dto/create-profile.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
+import { IncrementCountDto } from './dto/increment-count.dto';
 
+/**
+ * Autorización: este servicio confía en los headers `x-user-id` / `x-user-role`
+ * que inyecta el gateway tras validar el JWT. Los chequeos de abajo son
+ * defensa en profundidad: si alguien llega al servicio SIN pasar por el gateway,
+ * los headers vienen vacíos y las operaciones fallan cerradas (403) en vez de
+ * ejecutarse. No sustituyen a que el servicio no sea alcanzable desde internet.
+ */
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -26,19 +36,21 @@ export class UsersController {
   // Internal: called by auth-service after registration
   @Post('profiles')
   @HttpCode(HttpStatus.CREATED)
-  createProfile(@Body() body: { userId: string; displayName: string; role: string }) {
-    return this.usersService.createProfile(body.userId, body);
+  createProfile(@Body() dto: CreateProfileDto) {
+    return this.usersService.createProfile(dto);
   }
 
   // Admin: list all users
   @Get()
   findAll(
+    @Headers('x-user-role') requesterRole: string,
     @Query('search') search?: string,
     @Query('role') role?: string,
     @Query('status') status?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
+    this.usersService.assertAdmin(requesterRole);
     return this.usersService.findAll({ search, role, status, page, limit });
   }
 
@@ -63,8 +75,11 @@ export class UsersController {
   @Patch(':userId/notifications')
   updateNotifications(
     @Param('userId') userId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
     @Body() dto: UpdateNotificationSettingsDto,
   ) {
+    this.usersService.assertSelfOrAdmin(userId, requesterId, requesterRole);
     return this.usersService.updateNotificationSettings(userId, dto);
   }
 
@@ -72,8 +87,10 @@ export class UsersController {
   @Patch(':userId/status')
   updateStatus(
     @Param('userId') userId: string,
+    @Headers('x-user-role') requesterRole: string,
     @Body() dto: UpdateStatusDto,
   ) {
+    this.usersService.assertAdmin(requesterRole);
     return this.usersService.updateStatus(userId, dto);
   }
 
@@ -81,36 +98,52 @@ export class UsersController {
   @Patch(':userId/role')
   updateRole(
     @Param('userId') userId: string,
-    @Body() body: { role: string },
+    @Headers('x-user-role') requesterRole: string,
+    @Body() dto: UpdateRoleDto,
   ) {
-    return this.usersService.updateRole(userId, body.role);
+    this.usersService.assertAdmin(requesterRole);
+    return this.usersService.updateRole(userId, dto.role);
   }
 
   // Internal: increment asset count
   @Patch(':userId/asset-count')
   incrementAssetCount(
     @Param('userId') userId: string,
-    @Body() body: { delta?: number },
+    @Headers('x-user-role') requesterRole: string,
+    @Body() dto: IncrementCountDto,
   ) {
-    return this.usersService.incrementAssetCount(userId, body.delta);
+    this.usersService.assertAdmin(requesterRole);
+    return this.usersService.incrementAssetCount(userId, dto.delta);
   }
 
   // Internal: increment license count
   @Patch(':userId/license-count')
   incrementLicenseCount(
     @Param('userId') userId: string,
-    @Body() body: { delta?: number },
+    @Headers('x-user-role') requesterRole: string,
+    @Body() dto: IncrementCountDto,
   ) {
-    return this.usersService.incrementLicenseCount(userId, body.delta);
+    this.usersService.assertAdmin(requesterRole);
+    return this.usersService.incrementLicenseCount(userId, dto.delta);
   }
 
   @Delete(':userId')
-  softDelete(@Param('userId') userId: string) {
+  softDelete(
+    @Param('userId') userId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+  ) {
+    this.usersService.assertSelfOrAdmin(userId, requesterId, requesterRole);
     return this.usersService.softDelete(userId);
   }
 
   @Get(':userId/saved')
-  getSavedAssets(@Param('userId') userId: string) {
+  getSavedAssets(
+    @Param('userId') userId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+  ) {
+    this.usersService.assertSelfOrAdmin(userId, requesterId, requesterRole);
     return this.usersService.getSavedAssets(userId);
   }
 
@@ -119,7 +152,10 @@ export class UsersController {
   saveAsset(
     @Param('userId') userId: string,
     @Param('assetId') assetId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
   ) {
+    this.usersService.assertSelfOrAdmin(userId, requesterId, requesterRole);
     return this.usersService.saveAsset(userId, assetId);
   }
 
@@ -127,7 +163,10 @@ export class UsersController {
   unsaveAsset(
     @Param('userId') userId: string,
     @Param('assetId') assetId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
   ) {
+    this.usersService.assertSelfOrAdmin(userId, requesterId, requesterRole);
     return this.usersService.unsaveAsset(userId, assetId);
   }
 }

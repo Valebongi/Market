@@ -9,10 +9,27 @@ import {
   UpdateNotificationSettingsDto,
   UpdateStatusDto,
 } from './dto/update-profile.dto';
+import { CreateProfileDto } from './dto/create-profile.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * El requester (según los headers que inyecta el gateway) es el dueño del
+   * recurso o es admin. Falla cerrado: sin header no hay acceso.
+   */
+  assertSelfOrAdmin(userId: string, requesterId?: string, requesterRole?: string): void {
+    if (requesterRole === 'admin') return;
+    if (requesterId && requesterId === userId) return;
+    throw new ForbiddenException('No tenés permiso sobre este usuario');
+  }
+
+  assertAdmin(requesterRole?: string): void {
+    if (requesterRole !== 'admin') {
+      throw new ForbiddenException('Se requiere rol admin');
+    }
+  }
 
   async findById(userId: string) {
     const profile = await this.prisma.userProfile.findUnique({
@@ -59,15 +76,27 @@ export class UsersService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async createProfile(userId: string, data: { displayName: string; role: string }) {
-    return this.prisma.userProfile.create({
-      data: {
-        userId,
-        displayName: data.displayName,
-        role: data.role as any,
-        notificationSettings: {
-          create: {} as any,
-        },
+  /**
+   * Idempotente a propósito. auth-service llama a este endpoint no solo al
+   * registrar sino tambien en cada login (para cubrir cuentas legacy sin
+   * perfil): con `create` a secas, cada login posterior violaba el unique de
+   * `userId` y devolvía un 500 que el llamador descartaba en silencio. Con
+   * upsert, el reintento es un no-op barato y el perfil se autorrepara.
+   */
+  async createProfile(dto: CreateProfileDto) {
+    return this.prisma.userProfile.upsert({
+      where: { userId: dto.userId },
+      create: {
+        userId: dto.userId,
+        displayName: dto.displayName,
+        role: dto.role,
+        contactEmail: dto.contactEmail,
+        notificationSettings: { create: {} },
+      },
+      update: {
+        // No pisa displayName ni role: el usuario pudo haberlos cambiado desde
+        // el perfil o un admin desde el panel. Solo rellena el email si falta.
+        ...(dto.contactEmail ? { contactEmail: dto.contactEmail } : {}),
       },
       include: { notificationSettings: true },
     });
@@ -113,17 +142,17 @@ export class UsersService {
 
     return this.prisma.userProfile.update({
       where: { userId },
-      data: { status: dto.status as any },
+      data: { status: dto.status as 'active' | 'suspended' },
     });
   }
 
-  async updateRole(userId: string, role: string) {
+  async updateRole(userId: string, role: 'admin' | 'asset_owner' | 'entrepreneur') {
     const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
     if (!existing || existing.deletedAt) throw new NotFoundException('User not found');
 
     return this.prisma.userProfile.update({
       where: { userId },
-      data: { role: role as any },
+      data: { role: role as 'admin' | 'asset_owner' | 'entrepreneur' },
     });
   }
 

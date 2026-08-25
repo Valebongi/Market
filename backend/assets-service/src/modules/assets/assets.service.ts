@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   NotFoundException,
   ForbiddenException,
   ConflictException,
@@ -239,23 +240,56 @@ export class AssetsService {
     });
   }
 
+  /**
+   * Reporte de un activo por parte de un tercero.
+   *
+   * El umbral de auto-moderacion cuenta DENUNCIANTES DISTINTOS, no filas de
+   * asset_flags. Contando filas, un unico usuario podia llamar tres veces a este
+   * endpoint y bajar del marketplace el activo de cualquier competidor: el estado
+   * `flagged` lo saca del listado publico, que fuerza `status = 'published'`.
+   * Un reporte por usuario y por activo, y el titular no puede reportarse a si
+   * mismo para inflar el contador.
+   */
   async flag(id: string, reportedBy: string, reason: string) {
+    if (!reportedBy) {
+      throw new ForbiddenException('Authentication required to flag an asset');
+    }
+
+    const trimmedReason = (reason ?? '').trim();
+    if (trimmedReason.length < 10 || trimmedReason.length > 1000) {
+      throw new BadRequestException('Reason must be between 10 and 1000 characters');
+    }
+
     const asset = await this.prisma.asset.findFirst({
       where: { id, deletedAt: null },
     });
 
     if (!asset) throw new NotFoundException('Asset not found');
 
+    if (asset.ownerId === reportedBy) {
+      throw new ForbiddenException('You cannot flag your own asset');
+    }
+
+    const alreadyReported = await this.prisma.assetFlag.findFirst({
+      where: { assetId: id, reportedBy },
+    });
+
+    if (alreadyReported) {
+      throw new ConflictException('You have already flagged this asset');
+    }
+
     await this.prisma.assetFlag.create({
-      data: { assetId: id, reportedBy, reason },
+      data: { assetId: id, reportedBy, reason: trimmedReason },
     });
 
-    // Auto-flag the asset if it gets >= 3 unresolved flags
-    const flagCount = await this.prisma.assetFlag.count({
+    // Auto-flag el activo al llegar a 3 denunciantes distintos sin resolver.
+    const distinctReporters = await this.prisma.assetFlag.findMany({
       where: { assetId: id, resolved: false },
+      distinct: ['reportedBy'],
+      select: { reportedBy: true },
     });
 
-    if (flagCount >= 3) {
+    if (distinctReporters.length >= 3 && asset.status !== 'flagged') {
       await this.prisma.asset.update({
         where: { id },
         data: { status: 'flagged' },

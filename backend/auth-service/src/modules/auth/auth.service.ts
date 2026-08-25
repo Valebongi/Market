@@ -3,7 +3,6 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -202,11 +201,21 @@ export class AuthService {
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
-    // In production, send email here. For now, token is returned in the response (dev mode).
-    const isDev = this.config.get('NODE_ENV') !== 'production';
+    // TODO: enviar el email de recuperación. Hasta entonces el token solo se
+    // devuelve en el body cuando está EXPLÍCITAMENTE habilitado.
+    //
+    // Antes la condición era `NODE_ENV !== 'production'`, o sea fail-OPEN: en
+    // cualquier entorno donde NODE_ENV no estuviera seteado (Railway incluido si
+    // nadie la define) el endpoint entregaba un token de reseteo válido a
+    // cualquiera que conociera un email registrado = toma de cuenta directa.
+    // Ahora hay que optar por exponerlo, y por defecto no se expone.
+    const exposeResetToken =
+      this.config.get('EXPOSE_RESET_TOKEN') === 'true' ||
+      this.config.get('NODE_ENV') === 'development';
+
     return {
       message: 'Si el email está registrado, recibirás las instrucciones.',
-      ...(isDev && { devToken: token }),
+      ...(exposeResetToken && { devToken: token }),
     } as { message: string };
   }
 
@@ -249,10 +258,13 @@ export class AuthService {
   ): Promise<void> {
     const usersServiceUrl = this.config.get('USERS_SERVICE_URL', 'http://localhost:3003');
     try {
+      // `contactEmail` se recibía y no se enviaba: users-service guardaba el
+      // perfil sin email y la búsqueda del panel de admin (findAll filtra por
+      // displayName OR contactEmail) nunca podía matchear por email.
       await fetch(`${usersServiceUrl}/api/v1/users/profiles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, displayName, role }),
+        body: JSON.stringify({ userId, displayName, role, contactEmail }),
       });
     } catch {
       // Non-fatal: profile sync failure should not block auth

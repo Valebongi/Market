@@ -30,13 +30,16 @@ model LicenseRequest {
 
   messages Message[]
 
+  // findRequestsByUser filtra por requesterId/ownerId y ordena por updatedAt.
+  @@index([requesterId, updatedAt])
+  @@index([ownerId, updatedAt])
   @@map("license_requests")
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  requestId String   @map("request_id")
-  senderId  String   @map("sender_id")
+  id        String    @id @default(uuid())
+  requestId String    @map("request_id")
+  senderId  String    @map("sender_id")
   content   String
   readAt    DateTime? @map("read_at")
   deletedAt DateTime? @map("deleted_at")
@@ -44,6 +47,10 @@ model Message {
 
   request LicenseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
+  // Postgres NO indexa las FK automáticamente y Prisma tampoco lo hace por vos:
+  // sin esto, el count de getUnreadCount hacía Seq Scan sobre toda la tabla de
+  // mensajes en cada poll.
+  @@index([requestId, readAt])
   @@map("messages")
 }
 
@@ -58,5 +65,8 @@ model Notification {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, read])
+  // El poll de 30s pide las últimas N por usuario ordenadas por fecha; el índice
+  // [userId, read] resolvía el filtro pero dejaba un Sort explícito encima.
+  @@index([userId, createdAt])
   @@map("notifications")
 }

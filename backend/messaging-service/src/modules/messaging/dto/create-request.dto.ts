@@ -4,7 +4,13 @@ export class CreateRequestDto {
   @IsUUID()
   assetId: string;
 
+  // Copia desnormalizada del título del activo. assets-service lo topea en 120
+  // (CreateAssetDto). Acá iba sin tope: una cadena arbitrariamente larga se
+  // guardaba en la fila y se interpolaba en el body de cada notificación.
+  // 200 deja headroom sobre el límite real en vez de espejarlo justo, para no
+  // rechazar un título legacy y romper el alta de solicitudes.
   @IsString()
+  @MaxLength(200)
   assetTitle: string;
 
   @IsUUID()

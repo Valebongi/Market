@@ -7,10 +7,22 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AdminGuard } from '../../common/admin.guard';
+import { LogModerationDto } from './dto/log-moderation.dto';
+import { RecordSnapshotDto } from './dto/record-snapshot.dto';
+import { QueryMetricsDto } from './dto/query-metrics.dto';
+import { QueryModerationLogsDto } from './dto/query-moderation-logs.dto';
 
+/**
+ * `AdminGuard` a nivel de controller: TODO `/api/v1/admin/*` exige
+ * `x-user-role === 'admin'`, incluso si el request no pasó por el gateway.
+ * Ver el comentario largo en `common/admin.guard.ts`.
+ */
 @Controller('admin')
+@UseGuards(AdminGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -20,48 +32,27 @@ export class AdminController {
   }
 
   @Get('metrics')
-  getMetrics(@Query('range') range: '7d' | '30d' | '90d' | '365d' = '30d') {
-    return this.adminService.getMetrics(range);
+  getMetrics(@Query() query: QueryMetricsDto) {
+    return this.adminService.getMetrics(query.range ?? '30d');
   }
 
   @Post('metrics/snapshot')
   @HttpCode(HttpStatus.CREATED)
-  recordSnapshot(
-    @Body() body: {
-      totalUsers: number;
-      newUsers: number;
-      totalAssets: number;
-      publishedAssets: number;
-      totalRequests: number;
-      closedRequests: number;
-      totalViews: number;
-    },
-  ) {
-    return this.adminService.recordSnapshot(body);
+  recordSnapshot(@Body() dto: RecordSnapshotDto) {
+    return this.adminService.recordSnapshot(dto);
   }
 
   @Post('moderation/log')
   @HttpCode(HttpStatus.CREATED)
   logModeration(
     @Headers('x-user-id') adminId: string,
-    @Body() body: {
-      assetId: string;
-      assetTitle: string;
-      action: 'approved' | 'rejected' | 'flagged' | 'restored';
-      notes?: string;
-    },
+    @Body() dto: LogModerationDto,
   ) {
-    return this.adminService.logModeration({ ...body, adminId });
+    return this.adminService.logModeration({ ...dto, adminId });
   }
 
   @Get('moderation/logs')
-  getModerationLogs(
-    @Query('assetId') assetId?: string,
-    @Query('adminId') adminId?: string,
-    @Query('action') action?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.adminService.getModerationLogs({ assetId, adminId, action, page, limit });
+  getModerationLogs(@Query() query: QueryModerationLogsDto) {
+    return this.adminService.getModerationLogs(query);
   }
 }
