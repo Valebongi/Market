@@ -7,6 +7,7 @@ import { Bell, CheckCheck, MessageSquare, FileText, CheckCircle, XCircle, X } fr
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useNotifications } from "@/lib/notifications-context";
 import type { AppNotification } from "@/services/requests.service";
+import EmptyState from "./EmptyState";
 
 function notifIcon(type: string) {
   switch (type) {
@@ -64,10 +65,13 @@ export default function NotificationPanel({ onClose, anchorRef, panelClassName }
       {/* List */}
       <div className="max-h-96 overflow-y-auto">
         {notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center px-4">
-            <Bell className="h-8 w-8 text-slate-gray/30 dark:text-gray-600 mb-2" />
-            <p className="text-sm text-slate-gray dark:text-gray-400">Sin notificaciones</p>
-          </div>
+          <EmptyState
+            size="sm"
+            iconStyle="bare"
+            icon={<Bell className="h-8 w-8 text-slate-gray/30 dark:text-gray-600" />}
+            title="Sin notificaciones"
+            className="py-10"
+          />
         ) : (
           notifications.map((n) => (
             <NotifItem key={n.id} notification={n} onClose={onClose} />

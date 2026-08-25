@@ -3,11 +3,14 @@
 Hay dos caminos de despliegue documentados acá:
 
 - **Railway** (sección 3) — es el entorno de producción actual. Empezá por ahí.
+  La sección 11 cubre los 4 microservicios que faltan desplegar, y las fallas
+  del gateway que salían a la luz al levantarlos (arregladas, a verificar en vivo).
 - **Docker Compose** (sección 2) — despliegue autoalojado en un servidor propio,
   y también la forma de levantar la pila completa en local.
 
 Las secciones 5 a 10 (persistencia, migraciones, rate limiting, checklist de
-seguridad) aplican a los dos.
+seguridad) aplican a los dos. Las 12 y 13 son el estado de la operación
+(monitoreo, backups, límites) y de los costos.
 
 ## Requisitos previos
 
@@ -840,7 +843,18 @@ rutas públicas y las de auth, que son las que importan, sí pasan por el thrott
 - [ ] `RATE_LIMIT_AUTH_MAX` ajustado para login/registro (default: 5/min)
 - [ ] `RATE_LIMIT_TRUSTED_IPS` con la IP del frontend si usa fetch server-side
 - [ ] Backups automáticos configurados para `postgres_data` y `assets_uploads`
+- [ ] Backup de Postgres **restaurado al menos una vez** sobre una base descartable
 - [ ] Alertas de monitoreo configuradas (`/health` endpoints)
+- [ ] *Healthcheck Path* = `/health` declarado en **cada** servicio de Railway (§ 12.1)
+- [ ] Volume de Railway montado en `/app/public/uploads` de `assets-service`,
+      o uploads ya migrados a object storage (§ 3.6) — si no, cada deploy borra
+      las imágenes y las fichas quedan con `<img>` rotos
+- [ ] **El check de rol admin del gateway verificado en vivo** (§ 11.2): con un JWT
+      de rol `entrepreneur`, `GET /api/v1/admin/dashboard` debe devolver **403**.
+      Si devuelve 502 o 200, el check está inerte y el panel de admin queda abierto
+      a cualquier usuario logueado — `admin-service` no valida rol por su cuenta
+- [ ] `GET /api/v1/users` con JWT de admin **no** devuelve 404 (§ 11.2)
+- [ ] Límites de CPU/memoria seteados por servicio en Railway (§ 12.2)
 
 ---
 
@@ -886,3 +900,287 @@ para desarrollo local y para el despliegue con Docker Compose.
 | domains-service | `backend/domains-service/.env.example` |
 | admin-service | `backend/admin-service/.env.example` |
 | frontend | `frontend/.env.example` |
+
+---
+
+## 11. Desplegar los 4 servicios restantes (users, messaging, domains, admin)
+
+Esta sección completa la § 3.1, que cubre solo el núcleo de 5 servicios.
+
+### 11.1 Configuración por servicio
+
+Los cuatro son idénticos en forma: *Root Directory* en su subdirectorio,
+`Dockerfile` propio, **sin dominio público** (solo red interna), y una sola
+variable que importa más allá del puerto.
+
+| Servicio Railway | Root Directory | `PORT` | Base | Dominio público |
+|---|---|---|---|---|
+| `users-service` | `backend/users-service` | `3003` | `davinci_users` | no |
+| `messaging-service` | `backend/messaging-service` | `3004` | `davinci_messaging` | no |
+| `domains-service` | `backend/domains-service` | `3005` | `davinci_domains` | no |
+| `admin-service` | `backend/admin-service` | `3006` | `davinci_admin` | no |
+
+Variables de cada uno:
+
+```
+PORT=<3003..3006>
+NODE_ENV=production
+DATABASE_URL=postgresql://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/<base>
+FRONTEND_URL=https://<frontend>.up.railway.app
+```
+
+> Los `.env.example` de estos cuatro servicios **no declaran `NODE_ENV`**.
+> No es crítico como en `auth-service` (que sin él filtra el token de reseteo),
+> pero seteala igual: Prisma y Nest cambian de comportamiento según el valor.
+
+Y en el **gateway**, agregar las cuatro URLs internas que hoy caen al default
+`localhost` (§ 3.5):
+
+```
+USERS_SERVICE_URL=http://users-service.railway.internal:3003
+MESSAGING_SERVICE_URL=http://messaging-service.railway.internal:3004
+DOMAINS_SERVICE_URL=http://domains-service.railway.internal:3005
+ADMIN_SERVICE_URL=http://admin-service.railway.internal:3006
+```
+
+**Las bases hay que crearlas a mano**, igual que las dos primeras: el Postgres de
+Railway no ejecuta `scripts/init-databases.sql` (§ 3.2). Y correr las migraciones
+de Prisma de cada servicio (§ 6).
+
+### 11.2 Dos cosas que fallaban al levantarlos — arregladas, verificar en el deploy
+
+Las dos eran del **gateway** y ninguna se arreglaba con configuración de Railway.
+
+> **Estado:** el arreglo ya está en el código (`common/request-path.ts` + los
+> handlers de raíz de `ProxyController`), verificado end-to-end sobre el gateway
+> compilado. **Todavía no está desplegado.** Lo que sigue explica el *porqué* —
+> que es lo que evita que vuelva a pasar — y cierra con cómo confirmarlo en vivo.
+
+**1. `GET /api/v1/users` devuelve 404 — el listado de admin no existe para el gateway.**
+
+`ProxyController` registra `@All('users/*')` pero no `@All('users')`. En Express 4 esa
+ruta compila a `^/api/v1/users/(.*)$`, que **no** matchea el path desnudo. Para
+`assets` y `requests` sí se agregaron handlers de raíz explícitos; para `users` no.
+
+Verificado contra el gateway real:
+
+```
+GET /api/v1/users        -> 404 {"message":"Cannot GET /api/v1/users"}
+GET /api/v1/users/u1/... -> 502 (proxea bien)
+```
+
+`users-service` sí implementa el endpoint (`@Get()` en `users.controller.ts`), así que
+el 404 lo produce el gateway antes de proxear. Consecuencia: el listado de usuarios del
+panel de admin y el contador "usuarios totales" quedan rotos.
+
+`domains` y `admin` también son `@All('<svc>/*')` sin raíz, pero sus servicios no
+exponen rutas en la raíz, así que ahí el 404 es inocuo.
+
+**2. El check de rol admin del gateway no corre. Nunca corrió.**
+
+`AuthMiddleware` decide si una ruta es admin-only leyendo **`req.path`**. Nest monta
+ese middleware con `forRoutes('*')` sobre el prefijo global, o sea
+`app.use('/api/v1/*', …)`. Express consume todo el path matcheado como `baseUrl` y deja
+`req.url` — y por lo tanto `req.path` — en `/`.
+
+Medido inyectando un log en el middleware del gateway compilado:
+
+| Request | `req.path` | `req.baseUrl` | `req.originalUrl` |
+|---|---|---|---|
+| `GET /api/v1/admin/dashboard` | `/` | `/api/v1/admin/dashboard` | `/api/v1/admin/dashboard` |
+| `GET /api/v1/users/u1/saved` | `/` | `/api/v1/users/u1/saved` | `/api/v1/users/u1/saved` |
+
+Con `req.path === '/'`, **ninguna** comparación contra `/api/v1/...` puede dar
+verdadero. El resultado end-to-end, con un JWT de rol `entrepreneur`:
+
+```
+GET /api/v1/admin/dashboard  ->  502 (proxeado al downstream)
+                             ->  NO 403
+```
+
+Y `admin-service` **no valida rol en ningún endpoint**: lee `x-user-id` para firmar los
+logs de moderación y nada más. El gateway es la única defensa, y está inerte. Apenas
+`admin-service` tenga dominio interno, **cualquier usuario logueado llega al panel de
+administración completo**.
+
+> Esta es la razón por la que `admin-service` es el más riesgoso de los cuatro.
+> Los otros tres se pueden desplegar sin este arreglo; `admin-service` no debería.
+
+**El arreglo tiene que tocar las dos mitades a la vez.** El middleware ya distingue
+prefijo de match exacto (`ADMIN_ROUTE_PREFIXES` vs `ADMIN_EXACT_ROUTES`) — eso está
+bien y es necesario, porque `/api/v1/users/:id/perfil|notificaciones|guardados` son
+recursos del propio usuario y un match por prefijo los rechazaría con 403. Lo que
+falta es leer el path correcto. `throttler.config.ts` ya resolvió exactamente este
+problema y su helper es el patrón a seguir:
+
+```ts
+// gateway/src/common/throttler.config.ts — ya en el repo, ya correcto
+export function requestPath(req): string {
+  const raw = req.originalUrl ?? req.url ?? req.path ?? '';
+  const q = raw.indexOf('?');
+  return q === -1 ? raw : raw.slice(0, q);
+}
+```
+
+Por eso el rate limiting sí funciona y el check de rol no: usan fuentes distintas
+para lo mismo. Unificar en `requestPath()` elimina la asimetría de raíz — y de paso
+deja una sola base de paths (`/api/v1/...`) en vez de dos.
+
+> El `.exclude()` de `app.module.ts` sigue siendo la excepción legítima: Nest lo
+> matchea **sin** el prefijo global, y funciona. No lo "unifiques" agregándole
+> `api/v1`: se rompen todas las rutas públicas.
+
+**Cómo confirmarlo en el deploy.** Con un JWT de rol `entrepreneur` y otro de `admin`
+contra el gateway ya desplegado. Salida verificada sobre el gateway compilado con
+los cuatro downstream apagados (por eso los que pasan el check dan 502: el 502
+significa "el gateway te dejó pasar", que es justo lo que se quiere comprobar):
+
+| Request | Rol | Esperado |
+|---|---|---|
+| `GET /api/v1/admin/dashboard` | `entrepreneur` | **403** `Admin access required` |
+| `GET /api/v1/admin/dashboard` | `admin` | pasa (502 sin downstream, 200 con él) |
+| `GET /api/v1/users` | `entrepreneur` | **403** |
+| `GET /api/v1/users` | `admin` | pasa — y **no** 404 |
+| `GET /api/v1/users/?page=1` | `entrepreneur` | **403** (barra final y query normalizadas) |
+| `GET /api/v1/users/<id>/saved` | `entrepreneur` | pasa — **no** 403 |
+| `PUT /api/v1/users/<id>/profile` | `entrepreneur` | pasa — **no** 403 |
+| `GET /api/v1/assets` | sin token | pasa (ruta pública) |
+| `POST /api/v1/auth/login` | sin token | pasa (ruta pública) |
+
+Las últimas cuatro filas son la parte que se rompe fácil: si al "arreglar" el check
+de rol alguien vuelve a un match por prefijo sobre `/api/v1/users`, el dueño de la
+cuenta empieza a recibir 403 sobre su propio perfil, sus guardados y sus
+notificaciones. Por eso `ADMIN_EXACT_ROUTES` y `ADMIN_ROUTE_PREFIXES` están
+separados, y por eso las dos mitades se prueban juntas.
+
+### 11.3 Timeout del proxy
+
+`ProxyService` acepta `PROXY_TIMEOUT_MS` (default 30000). Sin timeout, un downstream
+que acepta la conexión y nunca responde dejaba la request colgada para siempre: el
+gateway se quedaba sin capacidad mientras `GET /health` seguía contestando `ok` —
+o sea, caído para los usuarios y verde para Railway.
+
+Distingue el caso del downstream caído:
+
+| Situación | Respuesta |
+|---|---|
+| Downstream no escucha | `502` `Service X is unavailable` |
+| Downstream acepta y no responde | `504` `Service X did not respond within <n>ms` |
+
+Verificado contra un downstream que acepta y nunca contesta, con
+`PROXY_TIMEOUT_MS=2000`:
+
+```
+HTTP 504 en 2.05s
+{"message":"Service admin did not respond within 2000ms","statusCode":504}
+```
+
+No hace falta setear `PROXY_TIMEOUT_MS` en Railway: el default de 30s está bien.
+Bajarlo tiene sentido si algún endpoint lento (upload de imágenes) empieza a dar 504
+antes de terminar — en ese caso el problema es el endpoint, no el timeout.
+
+---
+
+## 12. Lo que falta para operar de verdad
+
+Nada de esto está configurado hoy. Ordenado por lo que duele primero.
+
+### 12.1 Antes de tener usuarios reales
+
+**Uploads sobre disco efímero (§ 3.6).** Es la pérdida de datos más probable y la
+más silenciosa: cada push a GitHub rebuildea `assets-service` y **borra todas las
+imágenes**, mientras las filas de la base siguen apuntando a URLs que ya dan 404. No
+hay error, no hay alerta: las fichas de activo se quedan sin imagen. Volume de Railway
+en `/app/public/uploads` como parche inmediato; S3/R2 como solución real.
+
+**Backups de Postgres.** Seis bases en una instancia, sin snapshots configurados y sin
+un `pg_dump` verificado. Un backup que nunca se restauró no es un backup: probar la
+restauración sobre una base descartable antes de necesitarla.
+
+**Healthchecks en Railway.** Los siete servicios exponen `GET /health` fuera del prefijo
+global y ninguno lo tiene declarado en Railway. Sin eso, Railway da por buena una
+instancia apenas el proceso arranca — antes de que Prisma conecte — y rutea tráfico a
+un contenedor que devuelve 500. Setear *Healthcheck Path* = `/health` en cada servicio
+es un cambio de dashboard, sin código.
+
+**Alertas.** No hay ninguna. El mínimo viable: notificación de deploy fallido y de
+servicio caído (Railway las tiene nativas), más un chequeo externo contra
+`https://<gateway>/health`.
+
+### 12.2 Apenas haya tráfico
+
+**Rate limiting compartido (§ 7.6).** El storage del throttler vive en el proceso.
+Con una sola réplica el límite es exacto; con N réplicas el efectivo es N × límite.
+Hoy no es un problema porque no hay réplicas — es una precondición para escalar,
+no una deuda activa. Lo que hace falta concretamente:
+
+- El paquete de storage Redis de `@nestjs/throttler` (`ThrottlerStorageRedisService`)
+  y un Redis.
+- Registrar `storage:` en `ThrottlerModule.forRootAsync` — `buildThrottlerOptions()`
+  ya devuelve el objeto de opciones, así que es un campo más, sin tocar los dos
+  throttlers con nombre ni `GatewayThrottlerGuard`.
+- Un Redis en Railway es un servicio más con su costo. Alternativa sin Redis:
+  **no escalar el gateway** y aceptar el límite por proceso, o mover el rate limiting
+  al edge (Cloudflare).
+
+**Límites de recursos.** Ni `docker-compose.yml` ni Railway declaran CPU/memoria por
+servicio. Un leak en cualquiera de los siete puede comerse la instancia entera y
+arrastrar a los demás. En Railway se setea por servicio; en compose sería
+`deploy.resources.limits`.
+
+**Timeout en las llamadas del proxy.** `ProxyService.forwardRequest()` usa `fetch` sin
+`AbortSignal.timeout()`. Un downstream que acepta la conexión y no responde deja la
+request del gateway colgada indefinidamente; con suficientes, el gateway deja de
+atender aunque esté "healthy". Un timeout de 10-15s convierte una caída silenciosa en
+un 504 explícito.
+
+### 12.3 Cuando el equipo crezca
+
+**Logs estructurados.** Hoy es `console.log` y el logger default de Nest. Sin
+request-id propagado del gateway al downstream no se puede seguir una request entre
+servicios — que es justamente lo que uno necesita cuando algo falla en producción.
+
+**Métricas de plataforma.** `admin-service` calcula KPIs de negocio desde la base. No
+hay latencia por endpoint ni tasa de error.
+
+---
+
+## 13. Costos y topología en Railway
+
+Nueve servicios (7 apps + Postgres + frontend) sobre un plan de uso por recurso.
+Qué se puede tocar sin romper la arquitectura:
+
+**Lo que ya está bien y no hay que cambiar:**
+
+- **Una instancia de Postgres, seis bases** (§ 3.2). Seis instancias serían ~6× el
+  costo para el mismo dato. La separación lógica se mantiene.
+- **Solo tres dominios públicos** (gateway, frontend, assets-service). El resto por
+  `*.railway.internal`, que además **no paga egreso**. Cada dominio público de más es
+  tráfico facturado y superficie de ataque.
+
+**Dónde está el desperdicio:**
+
+- **`domains-service` y `admin-service` son casi idle.** El primero es un lookup RDAP
+  con un link de afiliación; el segundo, unas queries de KPI para el panel. Dos
+  contenedores NestJS completos, cada uno con su runtime, su Prisma y su memoria base,
+  para eso. Es el candidato natural a fusión: un solo servicio periférico con dos
+  módulos Nest y **dos `PrismaClient`** apuntando a `davinci_domains` y
+  `davinci_admin`. Las bases siguen separadas, el contrato de API no cambia y se
+  ahorra un contenedor.
+  **No lo hagas durante el despliegue**: es refactor. Anotalo para después de que los
+  nueve estén verdes.
+- **`assets-service` tiene dominio público solo para servir imágenes estáticas.**
+  Migrar los uploads a R2/S3 (§ 12.1) mata dos pájaros: resuelve la persistencia y
+  permite sacarle el dominio público, dejándolo en la red interna como los demás.
+
+**Réplicas:** una por servicio. No hay motivo para más con el tráfico actual, y
+subirle réplicas al gateway hoy **degrada** el rate limiting (§ 12.2) sin dar nada a
+cambio. El primero que justificaría escalar es `assets-service`, y solo después de
+sacarle los uploads de encima.
+
+**¿Y proxear `/uploads/*` por el gateway?** Se puede — `forwardMultipart()` ya
+pipea streams crudos, así que la mecánica existe. Pero mete todo el tráfico de
+imágenes por el gateway, que es el único proceso que no se puede replicar sin romper
+el throttler. Sirve como paso intermedio para sacarle el dominio público a
+`assets-service`; **no** como destino. El destino es object storage con su propia
+URL, y ahí el gateway no participa.
