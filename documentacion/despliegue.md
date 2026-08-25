@@ -854,6 +854,9 @@ rutas públicas y las de auth, que son las que importan, sí pasan por el thrott
       Si devuelve 502 o 200, el check está inerte y el panel de admin queda abierto
       a cualquier usuario logueado — `admin-service` no valida rol por su cuenta
 - [ ] `GET /api/v1/users` con JWT de admin **no** devuelve 404 (§ 11.2)
+- [ ] **Los `x-user-*` del cliente se descartan en el borde** (§ 9.1). Verificado en vivo:
+      `curl -s <API>/api/v1/assets -H 'x-user-role: admin' -H 'x-user-id: falso'` sobre
+      una ruta pública no debe llegar al microservicio con esos headers
 - [ ] Límites de CPU/memoria seteados por servicio en Railway (§ 12.2)
 
 ---
@@ -880,6 +883,22 @@ Internet
 ```
 
 En producción, los puertos 3001-3006 **no deben estar expuestos** al exterior. Solo el gateway (:8080) y el frontend (:3000) deberían ser accesibles, y ambos a través del reverse proxy.
+
+### 9.1 Los headers `x-user-*` son propiedad del gateway
+
+Los microservicios **confían** en `x-user-id` / `x-user-email` / `x-user-role` y no
+revalidan el JWT. Eso solo es seguro si esos headers no pueden originarse en el cliente.
+
+`identityHeaderScrubber` (`backend/gateway/src/common/identity-headers.ts`) los borra de
+**toda** request entrante, con `app.use()` en `main.ts`, antes de helmet y antes de
+`AuthMiddleware`. Va sobre el Express desnudo y no como middleware de Nest a propósito:
+los middlewares de Nest se montan bajo el prefijo global y respetan el `.exclude()` de
+`app.module.ts`, así que las rutas públicas (`GET /assets`, `POST /auth/login`, …) los
+esquivarían. Después del borrado, un `x-user-*` que vea un microservicio solo puede
+haberlo puesto el gateway.
+
+Esto **no** reemplaza el aislamiento de red del diagrama de arriba: si alguien alcanza
+`:3002` directo, se saltea el borde entero. Las dos medidas se necesitan juntas.
 
 ---
 

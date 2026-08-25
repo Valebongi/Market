@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { parseAllowedOrigins } from './common/cors-origins';
+import { identityHeaderScrubber } from './common/identity-headers';
 
 /**
  * `trust proxy` de Express. Sin esto, detrás de nginx/Caddy todas las requests
@@ -30,6 +31,12 @@ async function bootstrap() {
   if (trustProxy !== false) {
     app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
   }
+
+  // PRIMERO DE TODO: borra los x-user-* que mande el cliente. Los microservicios
+  // confian en esos headers sin revalidar el token, asi que su unica fuente
+  // legitima es AuthMiddleware. Va aca y no como middleware de Nest para que
+  // alcance tambien a las rutas del .exclude() (ver common/identity-headers.ts).
+  app.use(identityHeaderScrubber);
 
   // Security headers
   app.use(helmet());

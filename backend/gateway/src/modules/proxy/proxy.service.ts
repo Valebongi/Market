@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import * as http from 'http';
 import * as https from 'https';
+import { IDENTITY_HEADERS } from '../../common/identity-headers';
 
 interface ServiceConfig {
   baseUrl: string;
@@ -68,8 +69,10 @@ export class ProxyService {
       'Content-Type': 'application/json',
     };
 
-    // Forward injected auth headers from middleware
-    ['x-user-id', 'x-user-email', 'x-user-role'].forEach((h) => {
+    // Reenvia la identidad inyectada por AuthMiddleware. Llegado este punto los
+    // x-user-* solo pueden venir del gateway: identityHeaderScrubber ya borro
+    // los que hubiera mandado el cliente (ver common/identity-headers.ts).
+    IDENTITY_HEADERS.forEach((h) => {
       if (req.headers[h]) headers[h] = req.headers[h] as string;
     });
 
@@ -128,8 +131,9 @@ export class ProxyService {
     if (req.headers['content-type']) forwardHeaders['content-type'] = req.headers['content-type'];
     if (req.headers['content-length']) forwardHeaders['content-length'] = req.headers['content-length'];
 
-    // Inject auth headers from gateway middleware
-    ['x-user-id', 'x-user-email', 'x-user-role'].forEach((h) => {
+    // Misma garantia que en forwardRequest(): lo que quede en req.headers lo
+    // puso el gateway, no el cliente.
+    IDENTITY_HEADERS.forEach((h) => {
       if (req.headers[h]) forwardHeaders[h] = req.headers[h] as string;
     });
 
