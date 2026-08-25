@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ThrottlerModuleOptions } from '@nestjs/throttler';
+import { requestPath } from './request-path';
 
 /**
  * Rutas de autenticación sensibles a fuerza bruta.
@@ -14,17 +15,9 @@ export const AUTH_SENSITIVE_PATHS = [
   '/api/v1/auth/oauth/callback',
 ];
 
-/** Path sin query string, robusto ante middlewares que reescriben `req.url`. */
-export function requestPath(req: { originalUrl?: string; path?: string; url?: string }): string {
-  const raw = req.originalUrl ?? req.url ?? req.path ?? '';
-  const q = raw.indexOf('?');
-  return q === -1 ? raw : raw.slice(0, q);
-}
-
 export function isAuthSensitiveRequest(context: ExecutionContext): boolean {
   const req = context.switchToHttp().getRequest();
-  const path = requestPath(req).replace(/\/+$/, '') || '/';
-  return AUTH_SENSITIVE_PATHS.includes(path);
+  return AUTH_SENSITIVE_PATHS.includes(requestPath(req));
 }
 
 /**

@@ -7,7 +7,7 @@ import {
   ThrottlerModuleOptions,
   ThrottlerStorage,
 } from '@nestjs/throttler';
-import { requestPath } from './throttler.config';
+import { requestPath } from './request-path';
 
 /** Rutas que nunca deben consumir cupo (los balanceadores las golpean sin parar). */
 const NEVER_THROTTLED = ['/health'];
@@ -50,8 +50,7 @@ export class GatewayThrottlerGuard extends ThrottlerGuard {
     if (context.getType() !== 'http') return true;
 
     const req = context.switchToHttp().getRequest();
-    const path = requestPath(req).replace(/\/+$/, '') || '/';
-    if (NEVER_THROTTLED.includes(path)) return true;
+    if (NEVER_THROTTLED.includes(requestPath(req))) return true;
 
     if (this.trustedIps.length > 0) {
       const ip = normalizeIp(await this.getTracker(req));

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response, NextFunction } from 'express';
+import { requestPath } from './request-path';
 
 interface JwtPayload {
   sub: string;
@@ -56,9 +57,14 @@ export class AuthMiddleware implements NestMiddleware {
       req.headers['x-user-email'] = payload.email;
       req.headers['x-user-role'] = payload.role;
 
-      // Check admin-only routes. `req.path` ya viene sin query string, se le saca
-      // la barra final para que `/api/v1/users/` y `/api/v1/users` matcheen igual.
-      const path = req.path.replace(/\/+$/, '') || '/';
+      // Check admin-only routes.
+      // NO usar `req.path`: Nest monta este middleware con `app.use('/api/v1/*', ...)`
+      // y Express se lleva el path entero a `req.baseUrl`, dejando `req.path === '/'`.
+      // Con eso el check de rol nunca matcheaba y cualquier usuario logueado
+      // atravesaba el gateway hacia /api/v1/admin/*. `requestPath()` lee
+      // `originalUrl` (misma fuente que usa el rate limiting, que sí funciona)
+      // y devuelve el path sin query string ni barra final.
+      const path = requestPath(req);
       const isAdminRoute =
         ADMIN_EXACT_ROUTES.includes(path) ||
         ADMIN_ROUTE_PREFIXES.some((r) => path === r || path.startsWith(`${r}/`));
