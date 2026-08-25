@@ -5,6 +5,7 @@ import { Bookmark } from "lucide-react";
 import { useSavedAssets } from "@/lib/saved-assets-context";
 import { assetsService, mapAsset } from "@/services/assets.service";
 import AssetCard from "@/components/assets/AssetCard";
+import EmptyState from "@/components/ui/EmptyState";
 import type { Asset } from "@/types";
 
 export default function SavedAssetsPage() {
@@ -58,17 +59,12 @@ export default function SavedAssetsPage() {
           ))}
         </div>
       ) : displayed.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="inline-flex p-4 bg-blue-50 dark:bg-blue-950/30 rounded-2xl mb-4">
-            <Bookmark className="h-8 w-8 text-electric-blue dark:text-blue-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-carbon-gray dark:text-gray-100 mb-2">
-            No tenés activos guardados
-          </h3>
-          <p className="text-sm text-slate-gray dark:text-gray-400 max-w-sm mx-auto">
-            Guardá activos del marketplace para encontrarlos rápidamente después.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Bookmark className="h-8 w-8" />}
+          title="No tenés activos guardados"
+          description="Guardá activos del marketplace para encontrarlos rápidamente después."
+          action={{ label: "Explorar el marketplace", href: "/dashboard/explore" }}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {displayed.map((asset) => (

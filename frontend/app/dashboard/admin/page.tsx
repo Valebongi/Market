@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Users, Package, MessageSquare, TrendingUp, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { StatCard } from "@/components/ui/Card";
+import EmptyState from "@/components/ui/EmptyState";
 import Link from "next/link";
 import { apiFetch } from "@/lib/http";
 
@@ -182,7 +183,7 @@ export default function AdminDashboardPage() {
               {loading ? (
                 <div className="py-6 text-center text-sm text-slate-gray animate-pulse">Cargando...</div>
               ) : topAssets.length === 0 ? (
-                <div className="py-6 text-center text-sm text-slate-gray">Sin datos disponibles</div>
+                <EmptyState size="sm" title="Sin datos disponibles" />
               ) : topAssets.map((asset, i) => (
                 <div key={asset.id} className={`flex items-center justify-between px-4 py-3 text-sm ${i !== topAssets.length - 1 ? "border-b border-fog-gray" : ""}`}>
                   <div className="flex items-center gap-3 min-w-0">

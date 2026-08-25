@@ -6,6 +6,7 @@ import { RoleBadge } from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import EmptyState from "@/components/ui/EmptyState";
 import { cn, formatDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/http";
 
@@ -67,6 +68,14 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => { fetchUsers(); }, [search, roleFilter, statusFilter]);
+
+  const hasFilters = !!search || roleFilter !== "Todos" || statusFilter !== "Todos";
+
+  const clearFilters = () => {
+    setSearch("");
+    setRoleFilter("Todos");
+    setStatusFilter("Todos");
+  };
 
   async function toggleStatus(user: UserProfileRaw) {
     const newStatus = user.status === "active" ? "suspended" : "active";
@@ -238,7 +247,21 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
         {!loading && users.length === 0 && (
-          <div className="py-12 text-center text-sm text-slate-gray">No se encontraron usuarios</div>
+          // Un padrón vacío no es una búsqueda fallida: hay que decirlo distinto.
+          hasFilters ? (
+            <EmptyState
+              size="sm"
+              title="No se encontraron usuarios"
+              description="Ningún usuario coincide con la búsqueda o los filtros aplicados."
+              action={{ label: "Limpiar filtros", onClick: clearFilters, variant: "link" }}
+            />
+          ) : (
+            <EmptyState
+              size="sm"
+              title="Todavía no hay usuarios registrados"
+              description="Las cuentas van a aparecer acá a medida que se registren."
+            />
+          )
         )}
       </div>
 

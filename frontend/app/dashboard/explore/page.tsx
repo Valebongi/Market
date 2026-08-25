@@ -8,16 +8,8 @@ import type { Asset } from "@/types";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 import { cn } from "@/lib/utils";
 import FeaturedByDigitalAxios from "@/components/landing/FeaturedByDigitalAxios";
-
-const CATEGORIES = [
-  { slug: "software", label: "Software y Apps" },
-  { slug: "brand", label: "Marca y Branding" },
-  { slug: "design", label: "Diseño" },
-  { slug: "business_model", label: "Modelo de Negocio" },
-  { slug: "content", label: "Contenido Digital" },
-  { slug: "project", label: "Proyecto" },
-  { slug: "other", label: "Otro" },
-];
+import EmptyState from "@/components/ui/EmptyState";
+import { ASSET_CATEGORIES } from "@/lib/asset-categories";
 
 const LICENSE_TYPES = [
   { value: "all", label: "Cualquier licencia" },
@@ -139,13 +131,13 @@ export default function ExploreMarketplacePage() {
             <span className="text-xs font-semibold text-slate-gray dark:text-gray-500 shrink-0 uppercase tracking-wide mr-1">
               Categoría
             </span>
-            {CATEGORIES.map((cat) => (
+            {ASSET_CATEGORIES.map((cat) => (
               <button
-                key={cat.slug}
-                onClick={() => toggleCategory(cat.slug)}
+                key={cat.value}
+                onClick={() => toggleCategory(cat.value)}
                 className={cn(
                   "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                  selectedCategories.includes(cat.slug)
+                  selectedCategories.includes(cat.value)
                     ? "bg-electric-blue text-white border-electric-blue"
                     : "bg-snow-gray dark:bg-white/5 text-slate-gray dark:text-gray-400 border-transparent hover:border-electric-blue/40 hover:text-electric-blue dark:hover:text-electric-blue"
                 )}
@@ -207,7 +199,7 @@ export default function ExploreMarketplacePage() {
         {selectedCategories.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4 -mt-2">
             {selectedCategories.map((slug) => {
-              const cat = CATEGORIES.find((c) => c.slug === slug);
+              const cat = ASSET_CATEGORIES.find((c) => c.value === slug);
               return (
                 <span
                   key={slug}
@@ -231,14 +223,27 @@ export default function ExploreMarketplacePage() {
             ))}
           </div>
         ) : assets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-4xl mb-4">🔍</p>
-            <h3 className="text-xl font-semibold text-carbon-gray dark:text-gray-100">No encontramos activos</h3>
-            <p className="text-sm text-slate-gray dark:text-gray-400 mt-2">Intentá con otros filtros o términos de búsqueda.</p>
-            <button onClick={clearFilters} className="mt-4 text-sm text-electric-blue hover:underline">
-              Limpiar filtros
-            </button>
-          </div>
+          // Sin filtros activos el catálogo está genuinamente vacío: ofrecer
+          // "Limpiar filtros" ahí sería mentirle al usuario sobre la causa.
+          hasFilters ? (
+            <EmptyState
+              size="lg"
+              iconStyle="bare"
+              icon="🔍"
+              title="No encontramos activos"
+              description="Intentá con otros filtros o términos de búsqueda."
+              action={{ label: "Limpiar filtros", onClick: clearFilters, variant: "link" }}
+            />
+          ) : (
+            <EmptyState
+              size="lg"
+              iconStyle="bare"
+              icon="🌱"
+              title="El marketplace todavía está vacío"
+              description="Aún no hay activos publicados. Podés ser el primero en publicar el tuyo."
+              action={{ label: "Publicar un activo", href: "/dashboard/assets/new" }}
+            />
+          )
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
             {assets.map((asset) => (

@@ -10,22 +10,13 @@ import Input, { Textarea } from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { ASSET_CATEGORIES, getAssetCategoryLabel } from "@/lib/asset-categories";
 
 const STEPS = [
   { id: 1, label: "Información Básica" },
   { id: 2, label: "Detalles de Licencia" },
   { id: 3, label: "Recursos" },
   { id: 4, label: "Vista Previa" },
-];
-
-const CATEGORIES = [
-  { value: "software", label: "Software y Apps" },
-  { value: "brand", label: "Marca y Branding" },
-  { value: "design", label: "Diseño" },
-  { value: "business_model", label: "Modelo de Negocio" },
-  { value: "content", label: "Contenido Digital" },
-  { value: "project", label: "Proyecto" },
-  { value: "other", label: "Otro" },
 ];
 
 const LICENSE_TYPES = [
@@ -339,7 +330,7 @@ export default function NewAssetPage() {
                 required
               >
                 <option value="">Seleccioná una categoría</option>
-                {CATEGORIES.map((c) => (
+                {ASSET_CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </Select>
@@ -813,7 +804,7 @@ export default function NewAssetPage() {
                 VISTA PREVIA
               </span>
               <span className="inline-block bg-blue-50 text-electric-blue text-xs font-medium px-3 py-1 rounded-full mb-3">
-                {CATEGORIES.find((c) => c.value === basicInfo.category)?.label || "Categoría"}
+                {basicInfo.category ? getAssetCategoryLabel(basicInfo.category) : "Categoría"}
               </span>
               <h3 className="text-xl font-bold text-carbon-gray">{basicInfo.title || "Título del activo"}</h3>
               <p className="mt-2 text-sm text-slate-gray line-clamp-3">{basicInfo.description || "Descripción del activo..."}</p>

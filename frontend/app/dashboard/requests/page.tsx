@@ -5,7 +5,8 @@ import Avatar from "@/components/ui/Avatar";
 import { RequestStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { Send, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import { Send, CheckCircle, XCircle, ArrowLeft, AlertCircle, X } from "lucide-react";
+import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/lib/auth-context";
 import { requestsService as requestsApi } from "@/services/requests.service";
 import { usersService as usersApi } from "@/services/users.service";
@@ -32,6 +33,18 @@ interface Message {
 const FILTER_OPTIONS = ["Todas", "Pendientes", "Activas", "Cerradas"] as const;
 type Filter = (typeof FILTER_OPTIONS)[number];
 
+/**
+ * Cierre de un hilo. `summary` null significa que ya no hay resumen pendiente
+ * de enviar: o el usuario omitió registrarlo, o ya se envió y sólo falta el
+ * cambio de estado. Se guarda en estado para poder reintentar el paso que falló
+ * sin perder lo que el usuario cargó en el modal.
+ */
+type ThreadClosure = {
+  threadId: string;
+  status: string;
+  summary: string | null;
+};
+
 export default function RequestsPage() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -47,7 +60,13 @@ export default function RequestsPage() {
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showDealModal, setShowDealModal] = useState(false);
   const [showMobileConversation, setShowMobileConversation] = useState(false);
+  const [closureError, setClosureError] = useState<string | null>(null);
+  const [failedClosure, setFailedClosure] = useState<ThreadClosure | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Espejo de activeThreadId para no inyectar el mensaje de cierre en la
+  // conversación equivocada si el usuario cambia de hilo mientras el POST vuela.
+  const activeThreadIdRef = useRef<string | null>(null);
+  activeThreadIdRef.current = activeThreadId;
 
   // Load thread list once
   useEffect(() => {
@@ -157,60 +176,106 @@ export default function RequestsPage() {
       setShowDealModal(true);
       return;
     }
+    setClosureError(null);
     setActioning(true);
     try {
       await requestsApi.updateStatus(activeThreadId, status);
       setThreads((prev) =>
         prev.map((t) => (t.id === activeThreadId ? { ...t, status } : t))
       );
+      setFailedClosure(null);
+    } catch {
+      setFailedClosure({ threadId: activeThreadId, status, summary: null });
+      setClosureError("No pudimos actualizar el estado de la solicitud. Reintentá en unos segundos.");
     } finally {
       setActioning(false);
     }
   };
 
-  const handleDealClosure = async (data: DealClosureData) => {
-    if (!activeThreadId || !pendingStatus) return;
-    setShowDealModal(false);
+  /**
+   * Ejecuta el cierre de un hilo en dos pasos, en este orden y no al revés:
+   *
+   *   1. Se envía el resumen del acuerdo (si lo hay).
+   *   2. Recién después se cambia el estado a rejected/closed.
+   *
+   * El backend rechaza con 403 cualquier mensaje sobre un hilo ya cerrado, así
+   * que hacerlo en el orden inverso perdía el resumen SIEMPRE y dejaba la UI a
+   * medio actualizar. Si falla el paso 1 el hilo queda abierto a propósito: es
+   * la única forma de que el usuario pueda reintentar sin perder el dato.
+   */
+  const runClosure = async ({ threadId, status, summary }: ThreadClosure) => {
+    setClosureError(null);
     setActioning(true);
+
+    if (summary) {
+      try {
+        const sent = await requestsApi.sendMessage(threadId, summary);
+        const createdAt = sent?.createdAt || new Date().toISOString();
+        if (activeThreadIdRef.current === threadId) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: sent?.id || `closure_${Date.now()}`,
+              senderId: user?.id || "",
+              content: sent?.content || summary,
+              createdAt,
+            },
+          ]);
+        }
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === threadId ? { ...t, lastMessage: summary, lastMessageAt: createdAt } : t
+          )
+        );
+      } catch {
+        setFailedClosure({ threadId, status, summary });
+        setClosureError(
+          "No pudimos registrar el resumen del acuerdo. La conversación sigue abierta para que puedas reintentar."
+        );
+        setActioning(false);
+        return;
+      }
+    }
+
     try {
-      // Finalize the status change
-      await requestsApi.updateStatus(activeThreadId, pendingStatus);
-      // Send a system message summarising the outcome
-      const summary = data.agreed
-        ? `✅ Acuerdo cerrado${data.licenseType ? ` — Licencia ${data.licenseType}` : ""}${data.estimatedValue ? ` — ${data.currency} ${data.estimatedValue.toLocaleString()}` : ""}${data.notes ? `\n${data.notes}` : ""}`
-        : `❌ Sin acuerdo${data.notes ? ` — ${data.notes}` : ""}`;
-      await requestsApi.sendMessage(activeThreadId, summary);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `closure_${Date.now()}`,
-          senderId: user?.id || "",
-          content: summary,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      setThreads((prev) =>
-        prev.map((t) => (t.id === activeThreadId ? { ...t, status: pendingStatus } : t))
+      await requestsApi.updateStatus(threadId, status);
+      setThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, status } : t)));
+      setFailedClosure(null);
+    } catch {
+      // El resumen ya quedó guardado: al reintentar sólo falta el cambio de estado.
+      setFailedClosure({ threadId, status, summary: null });
+      setClosureError(
+        summary
+          ? "El resumen quedó registrado, pero no pudimos cerrar la solicitud. Reintentá en unos segundos."
+          : "No pudimos actualizar el estado de la solicitud. Reintentá en unos segundos."
       );
     } finally {
       setActioning(false);
-      setPendingStatus(null);
     }
   };
 
-  const handleSkipDealClosure = async () => {
+  const handleDealClosure = (data: DealClosureData) => {
     if (!activeThreadId || !pendingStatus) return;
+    const summary = data.agreed
+      ? `✅ Acuerdo cerrado${data.licenseType ? ` — Licencia ${data.licenseType}` : ""}${data.estimatedValue ? ` — ${data.currency} ${data.estimatedValue.toLocaleString()}` : ""}${data.notes ? `\n${data.notes}` : ""}`
+      : `❌ Sin acuerdo${data.notes ? ` — ${data.notes}` : ""}`;
+    const closure: ThreadClosure = { threadId: activeThreadId, status: pendingStatus, summary };
     setShowDealModal(false);
-    setActioning(true);
-    try {
-      await requestsApi.updateStatus(activeThreadId, pendingStatus);
-      setThreads((prev) =>
-        prev.map((t) => (t.id === activeThreadId ? { ...t, status: pendingStatus } : t))
-      );
-    } finally {
-      setActioning(false);
-      setPendingStatus(null);
-    }
+    setPendingStatus(null);
+    void runClosure(closure);
+  };
+
+  const handleSkipDealClosure = () => {
+    if (!activeThreadId || !pendingStatus) return;
+    const closure: ThreadClosure = { threadId: activeThreadId, status: pendingStatus, summary: null };
+    setShowDealModal(false);
+    setPendingStatus(null);
+    void runClosure(closure);
+  };
+
+  const dismissClosureError = () => {
+    setClosureError(null);
+    setFailedClosure(null);
   };
 
   const filteredThreads = threads.filter((t) => {
@@ -266,10 +331,26 @@ export default function RequestsPage() {
               ))}
             </div>
           ) : filteredThreads.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-2xl mb-2">💬</p>
-              <p className="text-sm text-slate-gray dark:text-gray-400">No hay conversaciones</p>
-            </div>
+            // Un buzón realmente vacío no es lo mismo que un filtro que no matchea.
+            threads.length === 0 ? (
+              <EmptyState
+                size="sm"
+                iconStyle="bare"
+                icon="💬"
+                title="Todavía no tenés solicitudes"
+                description="Cuando alguien te escriba por un activo tuyo —o vos solicites licenciar uno— la conversación aparece acá."
+                action={{ label: "Explorar activos", href: "/dashboard/explore", variant: "link" }}
+              />
+            ) : (
+              <EmptyState
+                size="sm"
+                iconStyle="bare"
+                icon="💬"
+                title={`Sin conversaciones ${filter.toLowerCase()}`}
+                description="Tenés solicitudes en otros estados. Probá cambiando el filtro."
+                action={{ label: "Ver todas", onClick: () => setFilter("Todas"), variant: "link" }}
+              />
+            )
           ) : (
             filteredThreads.map((thread) => {
               const otherId = user?.id === thread.ownerId ? thread.requesterId : thread.ownerId;
@@ -339,7 +420,13 @@ export default function RequestsPage() {
                 ))}
               </div>
             ) : messages.length === 0 ? (
-              <p className="text-sm text-slate-gray dark:text-gray-400 text-center">No hay mensajes aún.</p>
+              <EmptyState
+                size="sm"
+                iconStyle="bare"
+                icon="💬"
+                title="No hay mensajes aún"
+                description={isClosed ? undefined : "Escribí el primero para arrancar la conversación."}
+              />
             ) : (
               messages.map((msg) => {
                 const isMe = msg.senderId === user?.id;
@@ -408,6 +495,49 @@ export default function RequestsPage() {
             </div>
           )}
 
+          {/* Aviso de error del cierre — con reintento, para que un fallo no
+              se coma silenciosamente el resumen del acuerdo */}
+          {closureError && (
+            <div className="px-6 py-3 border-t border-soft-coral/40 bg-red-50 dark:bg-red-950/30">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-4 w-4 text-soft-coral dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-soft-coral dark:text-red-400">{closureError}</p>
+                  {failedClosure && (
+                    <div className="flex flex-wrap items-center gap-4 mt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={actioning}
+                        onClick={() => runClosure(failedClosure)}
+                      >
+                        Reintentar
+                      </Button>
+                      {failedClosure.summary && (
+                        <button
+                          type="button"
+                          disabled={actioning}
+                          onClick={() => runClosure({ ...failedClosure, summary: null })}
+                          className="text-xs font-medium text-slate-gray dark:text-gray-400 hover:text-carbon-gray dark:hover:text-gray-200 underline disabled:opacity-50 transition-colors"
+                        >
+                          Cerrar sin registrar el resumen
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissClosureError}
+                  aria-label="Descartar aviso"
+                  className="shrink-0 p-1 -mr-1 rounded-lg text-slate-gray dark:text-gray-400 hover:text-carbon-gray dark:hover:text-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Message Composer */}
           {!isClosed ? (
             <div className="px-6 py-4 border-t border-fog-gray dark:border-white/10">
@@ -444,11 +574,27 @@ export default function RequestsPage() {
         </div>
       ) : (
         <div className="hidden md:flex flex-1 items-center justify-center bg-snow-gray dark:bg-[#0d1117]">
-          <div className="text-center">
-            <p className="text-4xl mb-4">💬</p>
-            <p className="font-semibold text-carbon-gray dark:text-gray-100">No hay conversación seleccionada</p>
-            <p className="text-sm text-slate-gray dark:text-gray-400 mt-1">Seleccioná un mensaje para comenzar</p>
-          </div>
+          {threads.length === 0 && !loadingThreads ? (
+            <EmptyState
+              iconStyle="bare"
+              icon="💬"
+              title="Todavía no tenés solicitudes"
+              description="Explorá el marketplace y solicitá licenciar un activo, o publicá el tuyo para empezar a recibir consultas."
+              action={{ label: "Explorar activos", href: "/dashboard/explore" }}
+              secondaryAction={{
+                label: "Publicar un activo",
+                href: "/dashboard/assets/new",
+                variant: "link",
+              }}
+            />
+          ) : (
+            <EmptyState
+              iconStyle="bare"
+              icon="💬"
+              title="No hay conversación seleccionada"
+              description="Seleccioná un mensaje para comenzar."
+            />
+          )}
         </div>
       )}
 

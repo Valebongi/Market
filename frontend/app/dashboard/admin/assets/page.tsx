@@ -5,6 +5,7 @@ import { Search, CheckCircle, XCircle, Eye } from "lucide-react";
 import { AssetStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import EmptyState from "@/components/ui/EmptyState";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS } from "@/lib/utils";
 import { apiFetch } from "@/lib/http";
 import type { AssetCategory } from "@/types";
@@ -77,6 +78,13 @@ export default function AdminAssetsPage() {
   }
 
   useEffect(() => { fetchAssets(); }, [search, statusFilter]);
+
+  const hasFilters = !!search || statusFilter !== "Todos";
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("Todos");
+  };
 
   async function handlePublish(asset: RawAsset) {
     setActionLoading(true);
@@ -216,7 +224,21 @@ export default function AdminAssetsPage() {
           </tbody>
         </table>
         {!loading && assets.length === 0 && (
-          <div className="py-12 text-center text-slate-gray text-sm">No se encontraron activos</div>
+          // Sin búsqueda ni filtro de estado no es "no encontramos": no hay nada cargado.
+          hasFilters ? (
+            <EmptyState
+              size="sm"
+              title="No se encontraron activos"
+              description="Ningún activo coincide con la búsqueda o el filtro de estado."
+              action={{ label: "Limpiar filtros", onClick: clearFilters, variant: "link" }}
+            />
+          ) : (
+            <EmptyState
+              size="sm"
+              title="Todavía no hay activos publicados"
+              description="Cuando los titulares empiecen a publicar, van a aparecer acá para moderar."
+            />
+          )
         )}
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Package, MessageSquare, Eye, TrendingUp, Plus, Search, Globe, Clock } from "lucide-react";
 import Link from "next/link";
 import { StatCard } from "@/components/ui/Card";
+import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/lib/auth-context";
 import { assetsService as assetsApi } from "@/services/assets.service";
 import { requestsService as requestsApi } from "@/services/requests.service";
@@ -245,10 +246,12 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : recentActivity.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl p-8 text-center">
-            <p className="text-slate-gray dark:text-gray-400 text-sm">No hay actividad reciente aún.</p>
-            <p className="text-slate-gray dark:text-gray-500 text-xs mt-1">Publicá un activo para comenzar.</p>
-          </div>
+          <EmptyState
+            size="sm"
+            title="No hay actividad reciente aún"
+            description="Publicá un activo para comenzar."
+            className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl"
+          />
         ) : (
           <div className="bg-white dark:bg-gray-900 border border-fog-gray dark:border-white/10 rounded-xl overflow-hidden">
             {recentActivity.map((item, index) => {

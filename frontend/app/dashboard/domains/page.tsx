@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Globe, ExternalLink, Clock, AlertCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { apiFetch } from "@/lib/http";
 import { domainsService as domainsApi } from "@/services/domains.service";
@@ -220,7 +221,7 @@ export default function DomainsPage() {
         <div className="mt-8">
           <h3 className="text-lg font-semibold text-carbon-gray mb-4">Búsquedas Recientes</h3>
           {history.length === 0 && (
-            <p className="text-sm text-slate-gray">No hay búsquedas recientes.</p>
+            <EmptyState size="sm" title="No hay búsquedas recientes." />
           )}
           <div className="space-y-2">
             {history.map((item) => (

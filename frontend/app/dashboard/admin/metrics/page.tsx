@@ -5,14 +5,12 @@ import { TrendingUp, ArrowUpRight, RefreshCw } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
 import Button from "@/components/ui/Button";
 import { apiFetch } from "@/lib/http";
+import EmptyState from "@/components/ui/EmptyState";
+import { getAssetCategoryLabel } from "@/lib/asset-categories";
 
 const DATE_PRESETS = ["7 días", "30 días", "3 meses", "Año"];
 const RANGE_MAP: Record<string, string> = { "7 días": "7d", "30 días": "30d", "3 meses": "90d", "Año": "365d" };
 const CATEGORY_COLORS = ["#2563EB", "#4F46E5", "#059669", "#D97706", "#DC2626", "#DB2777", "#0891B2"];
-const CATEGORY_LABELS: Record<string, string> = {
-  software: "Software", brand: "Marca", design: "Diseño", business_model: "Negocio",
-  content: "Contenido", project: "Proyecto", other: "Otro",
-};
 
 interface MetricSnapshot {
   date: string;
@@ -66,7 +64,7 @@ export default function AdminMetricsPage() {
         (res.data ?? []).forEach((a) => { counts[a.category] = (counts[a.category] ?? 0) + 1; });
         setCategories(
           Object.entries(counts).map(([cat, count], i) => ({
-            name: CATEGORY_LABELS[cat] ?? cat,
+            name: getAssetCategoryLabel(cat),
             value: count,
             color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
           }))
@@ -208,11 +206,13 @@ export default function AdminMetricsPage() {
         {loading ? (
           <div className="h-72 flex items-center justify-center text-sm text-slate-gray animate-pulse">Cargando datos...</div>
         ) : !hasSnapshotData ? (
-          <div className="h-72 flex flex-col items-center justify-center text-center gap-4 bg-snow-gray rounded-xl">
-            <TrendingUp className="h-10 w-10 text-slate-gray/40" />
-            <p className="text-slate-gray text-sm">No hay snapshots registrados para este período.</p>
-            <p className="text-xs text-slate-gray max-w-xs">Hacé clic en &quot;Registrar Snapshot&quot; para guardar el estado actual de la plataforma.</p>
-          </div>
+          <EmptyState
+            size="sm"
+            icon={<TrendingUp className="h-5 w-5" />}
+            title="No hay snapshots registrados para este período."
+            description={'Hacé clic en "Registrar Snapshot" para guardar el estado actual de la plataforma.'}
+            className="h-72 bg-snow-gray rounded-xl"
+          />
         ) : (
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={chartData}>
@@ -234,7 +234,7 @@ export default function AdminMetricsPage() {
           {loading ? (
             <div className="h-40 flex items-center justify-center text-sm text-slate-gray animate-pulse">Cargando...</div>
           ) : categories.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-sm text-slate-gray">Sin datos</div>
+            <EmptyState size="sm" title="Sin datos" className="h-40" />
           ) : (
             <div className="flex items-center gap-6">
               <ResponsiveContainer width="50%" height={200}>
@@ -269,7 +269,7 @@ export default function AdminMetricsPage() {
           {loading ? (
             <div className="h-40 flex items-center justify-center text-sm text-slate-gray animate-pulse">Cargando...</div>
           ) : topAssets.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-sm text-slate-gray">Sin datos</div>
+            <EmptyState size="sm" title="Sin datos" className="h-40" />
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart

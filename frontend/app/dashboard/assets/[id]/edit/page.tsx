@@ -13,16 +13,7 @@ import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { Asset } from "@/types";
-
-const CATEGORIES = [
-  { value: "software", label: "Software y Apps" },
-  { value: "brand", label: "Marca y Branding" },
-  { value: "design", label: "Diseño" },
-  { value: "business_model", label: "Modelo de Negocio" },
-  { value: "content", label: "Contenido Digital" },
-  { value: "project", label: "Proyecto" },
-  { value: "other", label: "Otro" },
-];
+import { ASSET_CATEGORIES } from "@/lib/asset-categories";
 
 const LICENSE_TYPES = [
   { value: "exclusive", label: "Exclusiva", description: "Un solo licenciatario a la vez" },
@@ -270,7 +261,7 @@ export default function EditAssetPage() {
             onChange={(e) => setCategory(e.target.value)}
           >
             <option value="">Seleccioná una categoría</option>
-            {CATEGORIES.map((c) => (
+            {ASSET_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </Select>

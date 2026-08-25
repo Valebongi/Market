@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Search, LayoutGrid, List, Eye, MessageSquare, MoreHorizontal, Pencil, Archive, Trash2 } from "lucide-react";
+import { Plus, Search, LayoutGrid, List, Eye, MessageSquare, MoreHorizontal, Pencil, Archive, Trash2, Package } from "lucide-react";
 import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
 import { AssetStatusBadge } from "@/components/ui/Badge";
 import { cn, formatRelativeTime, ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber } from "@/lib/utils";
 import type { Asset, AssetCategory, LicenseType } from "@/types";
@@ -349,24 +350,20 @@ export default function MyAssetsPage() {
           ))}
         </div>
       ) : filteredAssets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-center">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-snow-gray dark:bg-white/5 rounded-full flex items-center justify-center text-slate-gray dark:text-gray-500 mb-4 sm:mb-6">
-            <svg className="h-7 w-7 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-            </svg>
-          </div>
-          <h3 className="text-lg sm:text-xl font-semibold text-carbon-gray dark:text-gray-100">
-            {search ? "No encontramos activos" : "Aún no hay activos aquí"}
-          </h3>
-          <p className="text-sm text-slate-gray dark:text-gray-400 mt-2 max-w-sm">
-            {search ? "Intentá con otro término de búsqueda." : "Publicá tu primer activo y comenzá a monetizar."}
-          </p>
-          {!search && (
-            <Link href="/dashboard/assets/new" className="mt-5">
-              <Button>Publicar mi Primer Activo</Button>
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          icon={<Package className="h-7 w-7 sm:h-8 sm:w-8" />}
+          title={search ? "No encontramos activos" : "Aún no hay activos aquí"}
+          description={
+            search
+              ? "Intentá con otro término de búsqueda."
+              : "Publicá tu primer activo y comenzá a monetizar."
+          }
+          action={
+            search
+              ? undefined
+              : { label: "Publicar mi Primer Activo", href: "/dashboard/assets/new" }
+          }
+        />
       ) : viewMode === "grid" || true ? (
         // Always grid on mobile; grid/list controlled on desktop
         <div className={cn(
