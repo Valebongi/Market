@@ -69,7 +69,13 @@ export interface Asset {
   territory?: string;
   duration?: string;
   status: AssetStatus;
-  priceType: "fixed" | "negotiable";
+  /**
+   * Espejo 1:1 de `pricingType` del backend — los TRES valores, incluido
+   * `"free"`. `mapAsset` lo preserva: un activo gratuito NO es "precio fijo 0".
+   * Al renderizar, `"free"` se muestra como "Gratis", no como "$0".
+   */
+  priceType: PricingType;
+  /** `undefined` si `priceType === "negotiable"`; `0` si es `"free"`. */
   priceFixed?: number;
   priceCurrency: string;
   allowedUses: string[];
@@ -112,6 +118,72 @@ export interface RawAsset {
   requestCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Un link tal como lo acepta el backend al ESCRIBIR (`links[]` del DTO). */
+export interface AssetLinkInput {
+  label: string;
+  url: string;
+  isMain?: boolean;
+}
+
+/**
+ * Body de `POST /assets` — espejo exacto de `CreateAssetDto` de assets-service.
+ *
+ * NO confundir con `RawAsset`, que es el modelo de **lectura**. El mismo campo
+ * cambia de forma según la dirección:
+ *
+ * | campo | escritura (este tipo) | lectura (`RawAsset`)          |
+ * |-------|-----------------------|-------------------------------|
+ * | tags  | `string[]`            | `Array<{ tag: string }>`      |
+ *
+ * Mandar `Array<{tag}>` en el POST da **400** (`@IsString({each:true})`).
+ * Por eso `assetsService.create/update` se tipan con estos payloads y no con
+ * `Partial<RawAsset>`.
+ *
+ * Los enums van con las uniones reales del front, que coinciden campo a campo
+ * con los `@IsEnum` del DTO: un valor inválido es error de compilación acá en
+ * vez de un 400 en runtime.
+ */
+export interface CreateAssetPayload {
+  /** 5..120 caracteres (validado en backend). */
+  title: string;
+  /** 50..5000 caracteres (validado en backend). */
+  description: string;
+  /** Es `assetType` en el modelo de lectura del front (`Asset`). */
+  category: AssetCategory;
+  licenseType: LicenseType;
+  pricingType: PricingType;
+  /** Máx. 2 decimales, >= 0. Se omite si `pricingType` no es `"fixed"`. */
+  price?: number;
+  currency?: string;
+  territory?: string;
+  duration?: string;
+  allowedUses?: string[];
+  /** Es `additionalConditions` (string) en `Asset`; acá es lista. */
+  restrictions?: string[];
+  /** `string[]` en escritura. En lectura vuelve como `Array<{ tag: string }>`. */
+  tags?: string[];
+  /** `externalLinks` + `previewUrls` de `Asset` unificados. `label: "preview"` marca preview. */
+  links?: AssetLinkInput[];
+  coverImageUrl?: string;
+}
+
+/**
+ * Body de `PUT /assets/:id` — espejo de `UpdateAssetDto`
+ * (`PartialType(CreateAssetDto)` + `status`).
+ *
+ * OJO con `status`: el backend sólo acepta `draft | published | archived`.
+ * `"flagged"` existe en `AssetStatus` (lectura) pero lo setea moderación,
+ * no el dueño: mandarlo da 400.
+ */
+export interface UpdateAssetPayload extends Partial<CreateAssetPayload> {
+  status?: Exclude<AssetStatus, "flagged">;
+}
+
+/** Respuesta de `POST /assets/upload-image` (multipart, campo `file`). */
+export interface AssetImageUploadResponse {
+  url: string;
 }
 
 // ── Requests / Messaging ──────────────────────────────────────────────
@@ -174,16 +246,62 @@ export interface AppNotification {
 }
 
 // ── Domains ───────────────────────────────────────────────────────────
+/**
+ * Un dominio dentro de `results` de `POST /domains/search`. Verificado contra
+ * la salida real de domains-service:
+ *
+ * ```json
+ * { "domain": "x.com", "extension": ".com", "available": true,
+ *   "registrarUrl": "https://www.namecheap.com/domains/registration/results/?domain=x.com" }
+ * ```
+ */
 export interface DomainResult {
   domain: string;
+  /** La extensión con el punto: `".com"`, `".io"`, … */
+  extension: string;
+  /**
+   * `true` sólo cuando RDAP lo confirmó. Un `unknown` (TLD fuera del bootstrap
+   * de IANA, timeout, rate limit) llega acá como `false`, a propósito.
+   */
   available: boolean;
-  price?: number;
-  currency?: string;
+  /**
+   * Link de afiliación (Namecheap) ya calculado por el backend — es la vía de
+   * monetización. `null` cuando `available === false`.
+   * USAR ESTE VALOR: mandar al usuario a la home del registrador pierde la
+   * atribución de la afiliación.
+   */
+  registrarUrl: string | null;
+  /**
+   * NO EXISTEN. domains-service nunca devuelve precio: el chequeo es RDAP puro
+   * y no consulta pricing de ningún registrador. Se declaran como `never` para
+   * que leerlos no compile y no vuelvan a aparecer en la UI.
+   * @deprecated el backend no manda este campo.
+   */
+  price?: never;
+  /** @deprecated el backend no manda este campo. Ver `price`. */
+  currency?: never;
 }
 
+/** Respuesta de `POST /domains/search`. */
 export interface DomainSearchResponse {
+  /** La query cruda, tal como la tipeó el usuario. */
+  query: string;
+  /** La query sanitizada (`[^a-z0-9-] → -`) que se usó para armar los dominios. Vacía si no quedó nada buscable. */
+  baseName: string;
+  results: DomainResult[];
+}
+
+/**
+ * Fila de `GET /domains/history` — es el modelo Prisma `DomainSearch` de
+ * domains-service: **una búsqueda entera** (con sus N dominios en `results`),
+ * NO un `DomainSearchResponse`.
+ */
+export interface DomainSearchRecord {
+  id: string;
+  userId: string;
   query: string;
   results: DomainResult[];
+  createdAt: string;
 }
 
 // ── Users (users-service) ─────────────────────────────────────────────

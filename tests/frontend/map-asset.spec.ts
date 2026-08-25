@@ -155,20 +155,31 @@ describe('mapAsset - traduccion de pricing', () => {
   });
 
   /**
-   * DIVERGENCIA DE CONTRATO — reportada al orquestador.
+   * DIVERGENCIA DE CONTRATO — RESUELTA.
    *
-   * El backend tiene TRES pricingType (`fixed` | `negotiable` | `free`:
-   * schema.prisma:41 y CreateAssetDto:31) pero el tipo `Asset` del frontend
-   * solo tiene DOS (`"fixed" | "negotiable"`: types/index.ts:72).
-   * mapAsset colapsa `free` en `"fixed"` con priceFixed = 0, asi que un activo
-   * gratuito se renderiza como "precio fijo 0" en vez de "Gratis".
+   * Este test fijaba el comportamiento ACTUAL (no el deseado) para que el fix
+   * fuera deliberado y visible: `Asset.priceType` tenia DOS valores
+   * (`"fixed" | "negotiable"`) contra los TRES del backend
+   * (`fixed | negotiable | free`: schema.prisma:41 y CreateAssetDto:31), y
+   * mapAsset colapsaba `free` en `"fixed"` con priceFixed = 0 — un activo
+   * gratuito se renderizaba como "precio fijo 0" en vez de "Gratis".
    *
-   * Este test fija el comportamiento ACTUAL (no el deseado) para que el fix sea
-   * deliberado y visible. Cuando se agregue "free" al tipo Asset, ROMPE. Bien.
+   * `Asset.priceType` ahora es `PricingType` (los tres valores) y mapAsset
+   * preserva `free`. El test se invierte: fija que NO se vuelva a colapsar.
    */
-  it('[COMPORTAMIENTO ACTUAL] pricingType "free" se colapsa en "fixed" con precio 0', () => {
+  it('preserva pricingType "free" en vez de colapsarlo en "fixed"', () => {
     const asset = mapAsset(rawAsset({ pricingType: 'free', price: undefined }));
-    expect(asset.priceType).toBe('fixed');
+    expect(asset.priceType).toBe('free');
+    // priceFixed queda en 0 (es gratis de verdad), pero lo que decide el render
+    // es priceType: "Gratis" se muestra por el tipo, no por el numero.
+    expect(asset.priceFixed).toBe(0);
+  });
+
+  it('un "free" con price cargado en la DB sigue siendo "free"', () => {
+    // Si alguien publico un precio y despues paso el activo a gratuito, el
+    // pricingType manda: no se puede renderizar un precio sobre un "free".
+    const asset = mapAsset(rawAsset({ pricingType: 'free', price: 500 }));
+    expect(asset.priceType).toBe('free');
     expect(asset.priceFixed).toBe(0);
   });
 });
