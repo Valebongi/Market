@@ -29,6 +29,10 @@ export class QueryModerationLogsDto {
   @IsIn(['approved', 'rejected', 'flagged', 'restored'])
   action?: string;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  // `@Max` en `page` y no solo en `limit`: sin tope, `?page=999999999` se
+  // traducia en un `skip` gigante que Postgres resuelve recorriendo y
+  // descartando filas. 10.000 paginas x 100 por pagina = 1M de registros de
+  // auditoria alcanzables, muy por encima de lo que la grilla necesita.
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10000) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
 }

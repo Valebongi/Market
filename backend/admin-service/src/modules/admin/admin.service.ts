@@ -43,15 +43,32 @@ export class AdminService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async recordSnapshot(data: {
-    totalUsers: number;
-    newUsers: number;
-    totalAssets: number;
-    publishedAssets: number;
-    totalRequests: number;
-    closedRequests: number;
-    totalViews: number;
-  }) {
+  /**
+   * Upsert por fecha: un snapshot por dia que se refresca. Eso es intencional,
+   * pero significa que cualquier admin puede pisar los numeros de hoy con lo
+   * que quiera, las veces que quiera. `recordedBy` no lo impide —no deberia—
+   * pero lo hace ATRIBUIBLE: queda quien lo escribio y cuando (`updatedAt`).
+   *
+   * OJO, y esto NO se arregla desde este servicio: los valores llegan del
+   * navegador del admin, no de una lectura autoritativa de las otras bases.
+   * Ver el reporte: `newUsers`, `closedRequests` y `totalViews` los manda el
+   * frontend hardcodeados en 0, asi que `conversionRate` es estructuralmente
+   * 0% siempre. Que el snapshot lo alimente un job del backend en vez del
+   * navegador es una decision de arquitectura (llamadas cruzadas entre
+   * servicios), no un fix local.
+   */
+  async recordSnapshot(
+    data: {
+      totalUsers: number;
+      newUsers: number;
+      totalAssets: number;
+      publishedAssets: number;
+      totalRequests: number;
+      closedRequests: number;
+      totalViews: number;
+    },
+    recordedBy: string,
+  ) {
     // setUTCHours, no setHours. La columna `date` es `@db.Date` y Prisma la
     // serializa en UTC: con `setHours` la medianoche LOCAL de un contenedor en
     // UTC+X cae el día anterior en UTC y el upsert pisa el snapshot equivocado.
@@ -61,8 +78,8 @@ export class AdminService {
 
     return this.prisma.metricSnapshot.upsert({
       where: { date: today },
-      update: data,
-      create: { date: today, ...data },
+      update: { ...data, recordedBy },
+      create: { date: today, ...data, recordedBy },
     });
   }
 

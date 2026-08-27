@@ -14,5 +14,9 @@ model DomainSearch {
   results   Json
   createdAt DateTime @default(now()) @map("created_at")
 
+  // `getHistory` y `pruneHistory` filtran por usuario y ordenan por fecha, y la
+  // tabla no tenia indice: cada consulta de historial era un scan completo
+  // sobre una tabla que crecia sin techo. El indice compuesto sirve a las dos.
+  @@index([userId, createdAt])
   @@map("domain_searches")
 }

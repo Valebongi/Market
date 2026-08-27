@@ -36,12 +36,27 @@ export class AdminController {
     return this.adminService.getMetrics(query.range ?? '30d');
   }
 
+  /**
+   * `x-user-id` no es opcional: `AdminGuard` ya garantizo que viene, que no
+   * esta vacio y que tiene forma sana. Se propaga para que la fila quede
+   * ATRIBUIDA — el upsert por fecha deja que cualquier admin pise el snapshot
+   * de hoy, y sin autor eso era gratis y anonimo.
+   */
   @Post('metrics/snapshot')
   @HttpCode(HttpStatus.CREATED)
-  recordSnapshot(@Body() dto: RecordSnapshotDto) {
-    return this.adminService.recordSnapshot(dto);
+  recordSnapshot(
+    @Headers('x-user-id') adminId: string,
+    @Body() dto: RecordSnapshotDto,
+  ) {
+    return this.adminService.recordSnapshot(dto, adminId);
   }
 
+  /**
+   * `adminId` sale del header, pero ya paso por `AdminGuard`, que lo exige no
+   * vacio y con forma de id. Antes viajaba crudo hasta la columna de
+   * auditoria: se podia firmar una decision de moderacion con id vacio o con
+   * el id de OTRO admin. Ver el comentario de `common/admin.guard.ts`.
+   */
   @Post('moderation/log')
   @HttpCode(HttpStatus.CREATED)
   logModeration(

@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LookupQuotaService } from './lookup-quota';
 import { SearchDomainDto } from './dto/search-domain.dto';
 import {
   AvailabilityResult,
@@ -24,6 +25,13 @@ const DEFAULT_EXTENSIONS = ['.com', '.io', '.app', '.tech', '.co', '.dev'];
 
 /** Largo máximo de una etiqueta DNS. */
 const MAX_LABEL_LENGTH = 63;
+
+/**
+ * Búsquedas que se conservan por usuario. El endpoint de historial tiene
+ * `@Max(100)`, así que arriba de 100 no hay forma de leerlas: es storage muerto
+ * y un vector de inflado barato. Ver `pruneHistory`.
+ */
+const HISTORY_RETENTION = 100;
 
 export interface DomainResult {
   domain: string;
@@ -142,9 +150,25 @@ export class DomainsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
+    private readonly quota: LookupQuotaService,
   ) {}
 
   async search(userId: string, dto: SearchDomainDto) {
+    // Antes de gastar una sola consulta saliente. Ver `lookup-quota.ts`: el
+    // rate limit del gateway es por IP y no ve el factor de amplificación de
+    // 18x que tiene cada búsqueda contra rdap.org.
+    if (!this.quota.hasBudget(userId)) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message:
+            'Alcanzaste el límite de búsquedas de dominio por hora. Probá de nuevo más tarde.',
+          retryAfter: this.quota.retryAfterSeconds(userId),
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const extensions = normalizeExtensions(dto.extensions);
     const baseName = toBaseName(dto.query);
 
@@ -221,6 +245,10 @@ export class DomainsService {
     const pricingAvailable = this.pricing.isPricingAvailable();
     const showsAnyPrice = [...results, ...suggestions].some((r) => r.pricing !== null);
 
+    // Se debita lo que REALMENTE salió a rdap.org. Los cache hits no cuentan:
+    // no generaron tráfico.
+    this.quota.spend(userId, lookups);
+
     await this.persist(userId, dto.query, results);
 
     return {
@@ -290,6 +318,7 @@ export class DomainsService {
       await this.prisma.domainSearch.create({
         data: { userId, query, results: entries as unknown as object },
       });
+      await this.pruneHistory(userId);
     } catch (error) {
       // El historial es secundario: si falla el insert, el usuario igual tiene
       // que ver su búsqueda. Antes esto tiraba el request entero.
@@ -299,6 +328,31 @@ export class DomainsService {
         }`,
       );
     }
+  }
+
+  /**
+   * El historial crecía sin techo: una fila por búsqueda, para siempre, y
+   * `GET /domains/history` nunca devuelve más de 100. O sea que todo lo que
+   * pasa de ahí es storage que nadie lee y que un usuario automatizado puede
+   * inflar a voluntad — la escritura la paga la base, no el atacante.
+   *
+   * Se conservan las `HISTORY_RETENTION` más recientes por usuario. El borrado
+   * es best-effort: si falla, la búsqueda ya se guardó y no se le rompe nada al
+   * usuario (por eso corre adentro del try de `persist`).
+   */
+  private async pruneHistory(userId: string): Promise<void> {
+    const stale = await this.prisma.domainSearch.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip: HISTORY_RETENTION,
+      select: { id: true },
+    });
+
+    if (stale.length === 0) return;
+
+    await this.prisma.domainSearch.deleteMany({
+      where: { id: { in: stale.map((row) => row.id) } },
+    });
   }
 
   async getHistory(userId: string, limit = 10) {

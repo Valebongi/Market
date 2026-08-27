@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { BlockedTargetError, safeFetch } from './safe-fetch';
 
 const logger = new Logger('Rdap');
 
@@ -144,13 +145,23 @@ async function fetchAvailability(
   domain: string,
 ): Promise<{ status: AvailabilityResult; reason: string }> {
   try {
-    const response = await fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
-      headers: { accept: 'application/rdap+json' },
-      signal: AbortSignal.timeout(RDAP_TIMEOUT_MS),
-    });
+    // `safeFetch` y no `fetch`: rdap.org REDIRIGE, y ese Location lo elige el
+    // operador del TLD, no nosotros. Ver el comentario largo de `safe-fetch.ts`
+    // — el `fetch` pelado seguía el salto a `127.0.0.1` sin chistar.
+    const { response, redirected } = await safeFetch(
+      `https://rdap.org/domain/${encodeURIComponent(domain)}`,
+      {
+        headers: { accept: 'application/rdap+json' },
+        signal: AbortSignal.timeout(RDAP_TIMEOUT_MS),
+      },
+    );
+
+    // El body RDAP no se usa —sólo importa el status— pero hay que cancelarlo
+    // o el socket queda tomado en el pool hasta que expire.
+    void response.body?.cancel().catch(() => undefined);
 
     if (response.status === 404) {
-      return response.redirected
+      return redirected
         ? { status: 'available', reason: '404 con redirect' }
         : { status: 'unknown', reason: '404 sin redirect: TLD fuera del bootstrap de IANA' };
     }
@@ -162,6 +173,14 @@ async function fetchAvailability(
     // 429 (rate limit), 5xx del registro, cualquier otra cosa: no sabemos.
     return { status: 'unknown', reason: `HTTP ${response.status}` };
   } catch (error) {
+    // Un destino bloqueado NO es un error de red: no se reintenta (el
+    // `Location` hostil va a ser el mismo) y se loguea fuerte, porque significa
+    // que un registro RDAP nos apuntó a la red interna.
+    if (error instanceof BlockedTargetError) {
+      logger.error(`RDAP para ${domain} apuntó a un destino bloqueado: ${error.message}`);
+      return { status: 'unknown', reason: `destino bloqueado: ${error.message}` };
+    }
+
     // Error de red o timeout.
     const message = error instanceof Error ? error.message : 'error desconocido';
     return { status: 'unknown', reason: `sin respuesta: ${message}` };

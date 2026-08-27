@@ -23,6 +23,15 @@ model ModerationLog {
   notes      String?
   createdAt  DateTime         @default(now()) @map("created_at")
 
+  // La tabla de auditoria se consulta SIEMPRE filtrada y ordenada por fecha, y
+  // no tenia un solo indice: cada `GET /admin/moderation/logs` era un scan
+  // completo. Con `page` sin tope en el DTO, un `?page=999999999` forzaba ese
+  // scan entero para devolver cero filas. La auditoria tiene que seguir
+  // respondiendo justo cuando alguien la esta atacando.
+  @@index([createdAt])
+  @@index([assetId])
+  @@index([adminId])
+  @@index([action])
   @@map("moderation_logs")
 }
 
@@ -37,6 +46,24 @@ model MetricSnapshot {
   closedRequests  Int      @default(0) @map("closed_requests")
   totalViews      Int      @default(0) @map("total_views")
   createdAt       DateTime @default(now()) @map("created_at")
+
+  // Quien escribio esta fila, y cuando fue la ULTIMA vez.
+  //
+  // `recordSnapshot` es un UPSERT por fecha: cualquier admin puede pisar el
+  // snapshot de hoy con los numeros que quiera, las veces que quiera, y hasta
+  // ahora eso no dejaba ningun rastro — ni quien, ni cuando, ni que habia
+  // antes. Las metricas del negocio son la base de las decisiones de producto
+  // y de lo que se le muestra a un inversor: falsearlas era gratis y anonimo.
+  //
+  // Esto no impide el upsert (que es el comportamiento deseado: un snapshot
+  // por dia que se refresca), pero lo hace atribuible.
+  //
+  // `recordedBy` es NULLABLE a proposito: las filas que ya existen no tienen
+  // autor conocido y rellenarlas con un valor inventado seria exactamente el
+  // problema que esta columna viene a resolver. NULL = "escrita antes de que
+  // hubiera atribucion".
+  recordedBy      String?  @map("recorded_by")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("metric_snapshots")
 }

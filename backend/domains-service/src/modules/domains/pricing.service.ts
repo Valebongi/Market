@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { readJsonCapped, safeFetch } from './safe-fetch';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -71,6 +72,30 @@ const PRICING_STALE_MAX_MS = 7 * 24 * 60 * 60 * 1000;
  * en el camino de una búsqueda: ver el comentario de `getTldPricing`.
  */
 const PORKBUN_TIMEOUT_MS = 20000;
+
+/**
+ * Techo de bytes de la respuesta de Porkbun.
+ *
+ * La respuesta real mide ~82 KB (907 TLDs). `response.json()` bufferea lo que
+ * venga sin mirar: si Porkbun devolviera un payload gigante —bug de su lado,
+ * endpoint comprometido, o algo en el medio— el servicio se comía esa memoria
+ * entera y se moría por OOM. 2 MB es 25x el tamaño real: no rompe nada
+ * legítimo y acota el daño.
+ */
+const PORKBUN_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Techo de TLDs que se aceptan de la respuesta. Porkbun devuelve 907; 5000
+ * deja margen para que el catálogo crezca sin que un payload con un millón de
+ * claves nos arme un Map de un millón de entradas en memoria.
+ */
+const PORKBUN_MAX_TLDS = 5000;
+
+/**
+ * Largo máximo de la clave de TLD. Nada legítimo pasa de 63 (límite de etiqueta
+ * DNS), y sin el corte una clave de 10 MB entra derecho al Map.
+ */
+const MAX_TLD_KEY_LENGTH = 63;
 
 export const PRICING_CURRENCY = 'USD';
 
@@ -194,7 +219,9 @@ export class PricingService implements OnModuleInit {
 
   private async refresh(): Promise<void> {
     try {
-      const response = await fetch(PORKBUN_PRICING_URL, {
+      // `safeFetch`, igual que RDAP: si Porkbun redirigiera (hoy no lo hace),
+      // el destino del salto lo elegiría un tercero. Ver `safe-fetch.ts`.
+      const { response } = await safeFetch(PORKBUN_PRICING_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
@@ -202,22 +229,41 @@ export class PricingService implements OnModuleInit {
       });
 
       if (!response.ok) {
+        void response.body?.cancel().catch(() => undefined);
         this.expireIfTooStale(`HTTP ${response.status}`);
         return;
       }
 
-      const payload = (await response.json()) as {
+      const payload = (await readJsonCapped(response, PORKBUN_MAX_BYTES)) as {
         status?: string;
         pricing?: Record<string, unknown>;
       };
 
-      if (payload?.status !== 'SUCCESS' || !payload.pricing) {
-        this.expireIfTooStale(`status=${payload?.status}`);
+      // `pricing` tiene que ser un objeto plano. Un array o un string pasaban
+      // el `!payload.pricing` y llegaban a `Object.entries`, que sobre un
+      // string devuelve un par por CARÁCTER.
+      const pricing = payload?.pricing;
+      if (
+        payload?.status !== 'SUCCESS' ||
+        typeof pricing !== 'object' ||
+        pricing === null ||
+        Array.isArray(pricing)
+      ) {
+        this.expireIfTooStale(`payload inesperado (status=${payload?.status})`);
         return;
       }
 
       const table: PricingTable = new Map();
-      for (const [tld, value] of Object.entries(payload.pricing)) {
+      let truncated = false;
+      for (const [tld, value] of Object.entries(pricing)) {
+        if (table.size >= PORKBUN_MAX_TLDS) {
+          truncated = true;
+          break;
+        }
+        if (typeof tld !== 'string' || tld.length === 0 || tld.length > MAX_TLD_KEY_LENGTH) {
+          continue;
+        }
+        if (typeof value !== 'object' || value === null) continue;
         const row = value as Record<string, unknown>;
         const firstYear = parseAmount(row?.registration);
         // Si falta el renewal se usa el de alta: es lo que pasa en los TLDs
@@ -226,6 +272,12 @@ export class PricingService implements OnModuleInit {
         const renewal = parseAmount(row?.renewal) ?? firstYear;
         if (firstYear === null || renewal === null) continue;
         table.set(tld.toLowerCase(), { firstYear, renewal });
+      }
+
+      if (truncated) {
+        this.logger.warn(
+          `La tabla de Porkbun trajo más de ${PORKBUN_MAX_TLDS} TLDs; se truncó`,
+        );
       }
 
       if (table.size === 0) {
