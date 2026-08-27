@@ -45,13 +45,26 @@ export interface DomainResult {
    */
   status: AvailabilityResult;
   /**
-   * Deep link principal (el primero de `offers`). `null` si no está disponible.
-   * Se mantiene el nombre del campo para no romper a los consumidores actuales,
-   * pero el destino cambió: antes iba a la página de RESULTADOS de Namecheap,
-   * ahora va al CARRITO con el dominio ya cargado.
+   * Deep link principal (el primero de `offers`), específico de ESTE dominio.
+   * A dónde apunta lo decide `DOMAINS_LINK_TARGET` (`search` por default; ver
+   * `registrars.ts`, donde está medido por qué `cart` no sirve hoy).
+   *
+   * `null` en dos casos, y el segundo es nuevo:
+   *   1. el dominio no está disponible;
+   *   2. está disponible pero NINGÚN registrador puede dar una página
+   *      específica de él — TLD que Namecheap no vende, con el comparativo
+   *      apagado. Es deliberado: antes que mandar el click a una landing
+   *      genérica donde el usuario tiene que retipear, no se manda.
+   *
+   * O sea: `available === true` ya NO garantiza `registrarUrl !== null`. La UI
+   * tiene que seguir tolerando el `null` (hoy lo hace: deshabilita el botón).
    */
   registrarUrl: string | null;
-  /** Opciones de compra por registrador. `[]` si no está disponible. */
+  /**
+   * Opciones de compra por registrador. `[]` si no está disponible, y también
+   * si está disponible pero no hay destino específico para ninguno — mismo
+   * caso 2 de `registrarUrl`.
+   */
   offers: RegistrarOffer[];
   /**
    * Precio de referencia del TLD, o `null` si no lo sabemos. Sólo se completa
