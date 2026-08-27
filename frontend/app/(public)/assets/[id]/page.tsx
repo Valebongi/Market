@@ -17,6 +17,7 @@ import Badge from "@/components/ui/Badge";
 import { ASSET_TYPE_LABELS, LICENSE_TYPE_LABELS, formatNumber, formatRelativeTime } from "@/lib/utils";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 import { ApiError } from "@/lib/http";
+import { serializeJsonLd } from "@/lib/security";
 import type { RawAsset } from "@/types";
 import AssetDetailSidebar from "@/components/assets/AssetDetailSidebar";
 import AssetOwnerInline from "@/components/assets/AssetOwnerInline";
@@ -156,7 +157,7 @@ export default async function AssetDetailPage({ params }: PageProps) {
     <div className="min-h-screen bg-white dark:bg-[#0d1117]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       {/* Breadcrumb */}
       <div className="bg-snow-gray dark:bg-gray-900 border-b border-fog-gray dark:border-white/10">

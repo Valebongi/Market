@@ -4,6 +4,11 @@ import { useState } from "react";
 import Script from "next/script";
 import { Github, Chrome } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import {
+  createOAuthNonce,
+  encodeOAuthState,
+  OAUTH_NONCE_STORAGE_KEY,
+} from "./oauth-handoff";
 
 declare global {
   interface Window {
@@ -77,15 +82,43 @@ export default function OAuthButtons({ returnTo, mode = "login" }: OAuthButtonsP
     });
   };
 
+  /**
+   * El `state` llevaba SOLO el `returnTo`, o sea que no era un `state`: era un
+   * parámetro de navegación con nombre de parámetro de seguridad. Sin un valor
+   * imprevisible que atemos a esta pestaña, cualquiera puede fabricar el
+   * callback y hacer que la víctima termine autenticada en una cuenta ajena
+   * (CSRF de login). Ahora el `state` es un nonce del CSPRNG que:
+   *
+   *   1. se guarda en `sessionStorage` — aislado por pestaña, así que probar
+   *      que vuelve es probar que ESTA pestaña arrancó el flujo;
+   *   2. viaja a GitHub, que lo devuelve tal cual;
+   *   3. lo verifica `/oauth-success` antes de escribir la sesión.
+   *
+   * Si `sessionStorage` no está disponible (modo privado, cookies bloqueadas)
+   * cortamos acá: es preferible avisar antes de salir que fallar después del
+   * viaje de ida y vuelta sin poder explicar por qué.
+   */
   const handleGithubLogin = () => {
     if (!githubClientId) {
       setError("GitHub OAuth no configurado. Agregá NEXT_PUBLIC_GITHUB_CLIENT_ID al .env.local");
       return;
     }
+
+    const nonce = createOAuthNonce();
+    try {
+      sessionStorage.setItem(OAUTH_NONCE_STORAGE_KEY, nonce);
+    } catch {
+      setError("Tu navegador está bloqueando el almacenamiento del sitio. Habilitalo o usá tu email y contraseña.");
+      return;
+    }
+
     setError("");
     setLoadingProvider("github");
-    const params = new URLSearchParams({ client_id: githubClientId, scope: "user:email" });
-    if (returnTo) params.set("state", encodeURIComponent(returnTo));
+    const params = new URLSearchParams({
+      client_id: githubClientId,
+      scope: "user:email",
+      state: encodeOAuthState(nonce, returnTo),
+    });
     window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`;
   };
 

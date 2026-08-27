@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import LandingMarketplace from "./_components/LandingMarketplace";
+import { serializeJsonLd } from "@/lib/security";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 const DESCRIPTION =
@@ -66,7 +67,7 @@ export default function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <LandingMarketplace />
     </>
