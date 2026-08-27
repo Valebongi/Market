@@ -152,7 +152,30 @@ export class ProxyService {
     );
 
     proxyReq.on('error', () => {
-      res.status(502).json({ message: `Service ${serviceName} is unavailable` });
+      // `destroy()` de más abajo también dispara este handler; el guard evita
+      // un segundo intento de escribir sobre una respuesta ya empezada.
+      if (!res.headersSent) {
+        res.status(502).json({ message: `Service ${serviceName} is unavailable` });
+      }
+    });
+
+    // A diferencia de forwardRequest(), este camino usa `http.request` crudo, que
+    // NO tiene timeout. Sin esto, un downstream que acepta la conexión y no
+    // responde (o un cliente que sube lento) deja el par de sockets abierto para
+    // siempre: el gateway agota descriptores mientras `GET /health` sigue en "ok".
+    proxyReq.setTimeout(this.timeoutMs, () => {
+      if (!res.headersSent) {
+        res.status(504).json({
+          message: `Service ${serviceName} did not respond within ${this.timeoutMs}ms`,
+        });
+      }
+      proxyReq.destroy();
+    });
+
+    // Si el cliente corta antes de que terminemos de responder, liberamos la
+    // conexión hacia el downstream en vez de dejarla colgada.
+    res.on('close', () => {
+      if (!res.writableFinished) proxyReq.destroy();
     });
 
     req.pipe(proxyReq);
