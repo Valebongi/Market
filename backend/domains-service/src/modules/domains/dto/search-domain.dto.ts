@@ -21,6 +21,12 @@ import {
  *
  * `@Matches` acepta solo TLDs reales: punto inicial, letras/dígitos/guiones,
  * con soporte de multi-nivel (`.co.uk`). `@ArrayMaxSize(10)` acota el fan-out.
+ *
+ * OJO: `@ArrayMaxSize(10)` ya NO es la única defensa contra el fan-out. Desde
+ * que la búsqueda genera sugerencias, el tope real lo ponen `RDAP_MAX_LOOKUPS`
+ * y la cola de `RDAP_CONCURRENCY` en `rdap.ts`: acá se acota cuántas
+ * extensiones puede pedir el cliente, allá cuántas consultas salen y de a
+ * cuántas por vez. Las dos cosas tienen que seguir siendo verdad.
  */
 export class SearchDomainDto {
   @IsString()
@@ -32,7 +38,12 @@ export class SearchDomainDto {
   @IsArray()
   @ArrayMaxSize(10)
   @IsString({ each: true })
-  @Matches(/^\.[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/, {
+  // Flag `i`: los TLDs son case-insensitive por DNS, así que `.COM` es tan
+  // válido como `.com`. Sin el flag, un cliente que mandara `.COM` se comía un
+  // 400 por un TLD perfectamente real, y el `.toLowerCase()` de
+  // `normalizeExtensions` no llegaba a correr nunca porque la validación
+  // rechaza antes. Normalizar a minúsculas queda del lado del service.
+  @Matches(/^\.[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i, {
     each: true,
     message: 'each extension must look like ".com" or ".co.uk"',
   })
