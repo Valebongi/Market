@@ -247,39 +247,115 @@ export interface AppNotification {
 
 // ── Domains ───────────────────────────────────────────────────────────
 /**
- * Un dominio dentro de `results` de `POST /domains/search`. Verificado contra
- * la salida real de domains-service:
- *
- * ```json
- * { "domain": "x.com", "extension": ".com", "available": true,
- *   "registrarUrl": "https://www.namecheap.com/domains/registration/results/?domain=x.com" }
- * ```
+ * Resultado de RDAP para un dominio.
+ * - `available`  → libre, confirmado por RDAP.
+ * - `registered` → ocupado, confirmado por RDAP.
+ * - `unknown`    → no se pudo confirmar (TLD fuera del bootstrap de IANA,
+ *                  timeout, rate limit). `available` llega en `false`, pero
+ *                  eso NO significa "ocupado": significa "no lo sabemos".
+ *                  La UI debería distinguirlo de `registered`.
  */
+export type DomainStatus = "available" | "registered" | "unknown";
+
+/**
+ * Precio de referencia de un TLD, tal como lo publica el registrador.
+ *
+ * **`firstYear` y `renewal` son ambos obligatorios y viajan juntos a
+ * propósito.** La brecha entre uno y otro es enorme en varios TLDs
+ * (`.tech`: 6,99 → 50,98; `.online`: 1,96 → 28,84), así que mostrar sólo el
+ * primer año es técnicamente cierto y prácticamente engañoso. No hay ninguna
+ * forma válida de tener este objeto con un solo precio: si el backend no
+ * conoce los dos, manda `pricing: null` entero.
+ *
+ * Para renderizar, preferí `toDomainPricingView()` de
+ * `services/domains.service.ts`: devuelve los dos precios y el disclaimer
+ * en una sola estructura, y no se puede construir sin el disclaimer.
+ */
+export interface TldPricing {
+  /** ISO 4217, p. ej. `"USD"`. */
+  currency: string;
+  /** Precio del primer año de registro. */
+  firstYear: number;
+  /** Precio de renovación anual. NUNCA opcional: ver el doc del tipo. */
+  renewal: number;
+  /** ISO timestamp de cuándo se tomó el precio del registrador. */
+  asOf: string;
+  /**
+   * Siempre `true`. Es un precio *de referencia*: el registrador cobra lo que
+   * cobra en el momento del checkout. Obliga a acompañarlo del
+   * `pricingDisclaimer` del envelope.
+   */
+  isReference: true;
+  source: "porkbun";
+}
+
+/** Una oferta concreta de un registrador para un dominio disponible. */
+export interface RegistrarOffer {
+  registrar: "namecheap" | "porkbun";
+  /** Nombre para mostrar, ya listo ("Namecheap", "Porkbun"). */
+  registrarName: string;
+  /**
+   * Link de afiliación ya armado por el backend — es la vía de monetización.
+   * USAR ESTE VALOR: mandar al usuario a la home del registrador pierde la
+   * atribución.
+   */
+  url: string;
+  /** `null` si no hay precio conocido para ese registrador + TLD. */
+  pricing: TldPricing | null;
+}
+
+/**
+ * Cómo se generó un dominio sugerido. Sólo viene en `suggestions`, nunca en
+ * `results`.
+ */
+export type DomainSuggestionKind = "tld" | "prefix" | "suffix" | "hyphen";
+
+/** Un dominio dentro de `results` o `suggestions` de `POST /domains/search`. */
 export interface DomainResult {
   domain: string;
   /** La extensión con el punto: `".com"`, `".io"`, … */
   extension: string;
   /**
-   * `true` sólo cuando RDAP lo confirmó. Un `unknown` (TLD fuera del bootstrap
-   * de IANA, timeout, rate limit) llega acá como `false`, a propósito.
+   * `true` sólo cuando RDAP lo confirmó libre. Un `status: "unknown"` llega
+   * acá como `false`, a propósito. Para distinguir "ocupado" de "no sabemos",
+   * mirá `status`.
    */
   available: boolean;
   /**
-   * Link de afiliación (Namecheap) ya calculado por el backend — es la vía de
-   * monetización. `null` cuando `available === false`.
-   * USAR ESTE VALOR: mandar al usuario a la home del registrador pierde la
-   * atribución de la afiliación.
+   * Link de afiliación principal (el primero de `offers`). `null` cuando el
+   * dominio no está disponible.
+   * Se mantiene por compatibilidad; si querés mostrar todas las opciones de
+   * compra, usá `offers`.
    */
   registrarUrl: string | null;
+  status: DomainStatus;
+  /** Ofertas de compra. `[]` cuando `available === false`. */
+  offers: RegistrarOffer[];
   /**
-   * NO EXISTEN. domains-service nunca devuelve precio: el chequeo es RDAP puro
-   * y no consulta pricing de ningún registrador. Se declaran como `never` para
-   * que leerlos no compile y no vuelvan a aparecer en la UI.
-   * @deprecated el backend no manda este campo.
+   * Precio de referencia del TLD. Sólo puede venir poblado si
+   * `available === true`; es `null` cuando no hay pricing conocido o el
+   * dominio está ocupado.
+   *
+   * Si esto se renderiza, el `pricingDisclaimer` del envelope es obligatorio
+   * en la misma pantalla.
    */
-  price?: never;
-  /** @deprecated el backend no manda este campo. Ver `price`. */
-  currency?: never;
+  pricing: TldPricing | null;
+  /** Sólo presente en `suggestions`. `undefined` en `results`. */
+  suggestionKind?: DomainSuggestionKind;
+}
+
+/** Telemetría del chequeo, para debug y para decidir si mostrar precios. */
+export interface DomainSearchMeta {
+  rdapLookups: number;
+  rdapCacheHits: number;
+  rdapRetries: number;
+  /**
+   * `false` cuando el proveedor de precios no respondió: en ese caso todos los
+   * `pricing` vienen en `null` y no hay que inventar un fallback.
+   */
+  pricingAvailable: boolean;
+  /** ISO timestamp del chequeo. */
+  checkedAt: string;
 }
 
 /** Respuesta de `POST /domains/search`. */
@@ -288,7 +364,37 @@ export interface DomainSearchResponse {
   query: string;
   /** La query sanitizada (`[^a-z0-9-] → -`) que se usó para armar los dominios. Vacía si no quedó nada buscable. */
   baseName: string;
+  /** Los dominios pedidos explícitamente (query × extensiones). */
   results: DomainResult[];
+  /** Alternativas generadas por el backend. Cada una trae `suggestionKind`. */
+  suggestions: DomainResult[];
+  /**
+   * Texto legal que el backend manda ya redactado. **Es obligatorio mostrarlo
+   * cuando hay cualquier precio en pantalla** (de `results`, de `suggestions`
+   * o de `offers`). Viene del backend justamente para que la regla no dependa
+   * de que cada pantalla se acuerde de escribirlo.
+   *
+   * `null` cuando no hay ningún precio en la respuesta.
+   */
+  pricingDisclaimer: string | null;
+  meta: DomainSearchMeta;
+}
+
+/**
+ * Un dominio dentro de `GET /domains/history`.
+ *
+ * **Deliberadamente más angosto que `DomainResult`.** El historial no trae
+ * `pricing`, `offers` ni `registrarUrl`: un precio o un link al carrito
+ * congelados hace días son información falsa en el momento en que alguien los
+ * mira. Leer `pricing` de acá es un error de compilación, y así tiene que
+ * quedar. Si hace falta un precio actual, hay que re-buscar el dominio.
+ */
+export interface DomainHistoryResult {
+  domain: string;
+  extension: string;
+  /** Estado al momento de la búsqueda, no ahora. Etiquetalo como histórico. */
+  available: boolean;
+  status: DomainStatus;
 }
 
 /**
@@ -300,7 +406,7 @@ export interface DomainSearchRecord {
   id: string;
   userId: string;
   query: string;
-  results: DomainResult[];
+  results: DomainHistoryResult[];
   createdAt: string;
 }
 
