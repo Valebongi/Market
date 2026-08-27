@@ -44,6 +44,13 @@ export class AssetsService {
    * depende de leer el estado y por lo tanto no puede volver a perder la carrera.
    */
   async create(ownerId: string, dto: CreateAssetDto) {
+    // `ownerId` viene del header `x-user-id` que inyecta el gateway tras validar
+    // el JWT. En una request legitima siempre esta; si falta (llamada directa al
+    // servicio saltando el gateway, o header vacio) el activo quedaria sin dueno
+    // y Prisma tiraria un 500 al violar el NOT NULL de `owner_id`. Cortamos antes
+    // con un 401 claro en vez de filtrar un error interno.
+    if (!ownerId) throw new UnauthorizedException('Authentication required');
+
     const base = slugify(dto.title);
     const { tags, links, allowedUses, restrictions, ...assetData } = dto;
 
@@ -289,6 +296,29 @@ export class AssetsService {
       throw new ForbiddenException('You do not have permission to update this asset');
     }
 
+    // ── Candado de moderacion ────────────────────────────────────────────
+    // `flagged` es un estado de MODERACION, no un estado del titular. Lo pone la
+    // auto-moderacion al llegar a 3 denunciantes distintos y solo un admin (o la
+    // revision humana de admin-service) debe sacarlo de ahi.
+    //
+    // Sin este candado, el titular de un activo denunciado lo revivia solo con
+    // `PUT /:id { status: 'published' }` — la moderacion quedaba en decorativa:
+    // te denuncian por fraude, vuelves a publicar, y a otra ronda. Un no-admin no
+    // puede transicionar un activo `flagged` a ningun otro estado; SI puede
+    // seguir editando el contenido (para corregir lo denunciado) mientras el
+    // estado permanece `flagged`.
+    const nuevoStatus = (dto as any).status;
+    if (
+      asset.status === 'flagged' &&
+      userRole !== 'admin' &&
+      nuevoStatus !== undefined &&
+      nuevoStatus !== 'flagged'
+    ) {
+      throw new ForbiddenException(
+        'Este activo esta en revision por denuncias. Solo un administrador puede cambiar su estado.',
+      );
+    }
+
     // `slug` se descarta a proposito: es INMUTABLE despues de crear el activo.
     //
     // Que `update()` no lo regenerara al cambiar el titulo ya era el
@@ -347,6 +377,16 @@ export class AssetsService {
       throw new ConflictException('Asset is already published');
     }
 
+    // Mismo candado de moderacion que en `update()`: `publish()` es la otra
+    // puerta por la que el titular podia revivir un activo `flagged`
+    // (flagged -> published pasa el chequeo de "ya publicado"). La revision de
+    // un activo denunciado la resuelve un admin, no un re-publish del titular.
+    if (asset.status === 'flagged') {
+      throw new ForbiddenException(
+        'Este activo esta en revision por denuncias y no puede republicarse hasta que un administrador lo resuelva.',
+      );
+    }
+
     return this.prisma.asset.update({
       where: { id },
       data: { status: 'published', publishedAt: new Date() },
@@ -362,6 +402,16 @@ export class AssetsService {
 
     if (asset.ownerId !== userId && userRole !== 'admin') {
       throw new ForbiddenException('You do not have permission to archive this asset');
+    }
+
+    // Tercera puerta del candado de moderacion: sin esto el titular archivaba su
+    // activo `flagged` (flagged -> archived) y despues lo republicaba desde
+    // `archived`, esquivando el bloqueo de `publish()`. Mientras esta denunciado,
+    // el estado solo lo mueve un admin.
+    if (asset.status === 'flagged' && userRole !== 'admin') {
+      throw new ForbiddenException(
+        'Este activo esta en revision por denuncias. Solo un administrador puede cambiar su estado.',
+      );
     }
 
     return this.prisma.asset.update({
@@ -449,9 +499,17 @@ export class AssetsService {
   }
 
   async incrementRequestCount(id: string) {
-    await this.prisma.asset.update({
-      where: { id },
+    // `update` sobre un id inexistente tira P2025 y el endpoint respondia 500
+    // (y un 500 con id arbitrario es un oraculo de existencia + ruido de logs).
+    // Solo se cuenta sobre un activo vivo y publicado: una solicitud de licencia
+    // se crea contra la ficha publica, que ya exige `published`.
+    const result = await this.prisma.asset.updateMany({
+      where: { id, deletedAt: null, status: 'published' },
       data: { requestCount: { increment: 1 } },
     });
+
+    if (result.count === 0) throw new NotFoundException('Asset not found');
+
+    return { message: 'Request count incremented' };
   }
 }

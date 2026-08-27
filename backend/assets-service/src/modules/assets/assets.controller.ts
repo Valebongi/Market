@@ -18,10 +18,36 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { randomUUID } from 'crypto';
+import { join } from 'path';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
+
+/**
+ * Tipos de imagen aceptados en el upload, y la extension con la que se GUARDAN.
+ *
+ * Es una whitelist a proposito, y por dos motivos de seguridad:
+ *
+ *  1. Solo raster. Se excluye `image/svg+xml`: un SVG es un documento XML que
+ *     ejecuta `<script>`/`onload`, y como se sirve estatico desde el ORIGEN del
+ *     servicio (`SERVICE_URL/uploads/...`), un SVG malicioso subido como
+ *     "imagen" es XSS almacenado contra ese origen.
+ *
+ *  2. La extension guardada sale de ESTE mapa, nunca del nombre del cliente. El
+ *     codigo anterior usaba `extname(file.originalname)`: subiendo `x.html` con
+ *     un `Content-Type: image/png` falsificado (el mimetype tambien es del
+ *     cliente y se puede mentir), el archivo se guardaba como `.html` y se
+ *     servia como `text/html` — otra vez XSS. Derivar la extension del mimetype
+ *     validado corta tanto ese disfraz como el path traversal via `originalname`
+ *     (`../../etc/algo`), porque el nombre del cliente ya no toca el filesystem.
+ */
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
 import { FilterAssetsDto } from './dto/filter-assets.dto';
 
 // Headers injected by the API Gateway after JWT validation
@@ -41,17 +67,30 @@ export class AssetsController {
       storage: diskStorage({
         destination: join(process.cwd(), 'public', 'uploads'),
         filename: (_req, file, cb) => {
-          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-          cb(null, `${unique}${extname(file.originalname)}`);
+          // Nombre 100% generado por el servidor + extension derivada del
+          // mimetype validado. Nada del cliente (ni nombre ni extension) llega
+          // al filesystem: sin traversal, sin extension disfrazada.
+          const ext = ALLOWED_IMAGE_TYPES[file.mimetype] ?? '';
+          cb(null, `${Date.now()}-${randomUUID().slice(0, 12)}${ext}`);
         },
       }),
       fileFilter: (_req, file, cb) => {
-        if (!file.mimetype.startsWith('image/')) {
-          return cb(new BadRequestException('Solo se permiten imágenes'), false);
+        // Whitelist estricta de mimetypes raster. NO alcanza `startsWith('image/')`:
+        // dejaba pasar `image/svg+xml` (XSS) y cualquier `image/<loquesea>`.
+        // El mimetype sigue siendo declarado por el cliente; por eso ademas se
+        // fuerza la extension de guardado desde el mapa (arriba), de modo que un
+        // contenido no-imagen con mimetype mentido se sirva igual como imagen y
+        // el navegador no lo interprete como HTML/SVG. La verificacion por
+        // magic-bytes del contenido real queda como endurecimiento pendiente.
+        if (!ALLOWED_IMAGE_TYPES[file.mimetype]) {
+          return cb(
+            new BadRequestException('Solo se permiten imágenes JPG, PNG, WEBP o GIF'),
+            false,
+          );
         }
         cb(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5 MB, un solo archivo
     }),
   )
   uploadImage(

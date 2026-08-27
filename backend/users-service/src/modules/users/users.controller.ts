@@ -72,10 +72,17 @@ export class UsersController {
     return this.usersService.findAll({ search, role, status, page, limit });
   }
 
-  // Get any user profile by userId
+  // Get any user profile by userId.
+  // Ruta pública: devuelve un subconjunto público salvo que el requester sea el
+  // propio dueño o un admin (según los headers que inyecta el gateway). Ver
+  // findById en el service.
   @Get(':userId')
-  findById(@Param('userId') userId: string) {
-    return this.usersService.findById(userId);
+  findById(
+    @Param('userId') userId: string,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+  ) {
+    return this.usersService.findById(userId, requesterId, requesterRole);
   }
 
   // Update own profile

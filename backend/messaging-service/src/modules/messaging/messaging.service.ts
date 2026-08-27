@@ -10,6 +10,10 @@ import {
   SendMessageDto,
   UpdateRequestStatusDto,
 } from './dto/create-request.dto';
+import { sanitizeForNotification, sanitizeSingleLine } from '../../common/text-sanitizer';
+
+/** Tope duro de filas por página de notificaciones (el poll pide cada 30s). */
+const MAX_NOTIFICATIONS = 100;
 
 @Injectable()
 export class MessagingService {
@@ -41,10 +45,15 @@ export class MessagingService {
       throw new ConflictException('You already have a pending request for this asset');
     }
 
+    // `assetTitle` lo manda el cliente y NO se valida contra assets-service.
+    // Se guarda saneado para que no pueda falsear su propia presentación en la
+    // bandeja del titular (saltos de línea, overrides bidi, zero-width).
+    const assetTitle = sanitizeSingleLine(dto.assetTitle, 200);
+
     const request = await this.prisma.licenseRequest.create({
       data: {
         assetId: dto.assetId,
-        assetTitle: dto.assetTitle,
+        assetTitle,
         requesterId,
         ownerId: dto.ownerId,
         initialMessage: dto.initialMessage,
@@ -61,11 +70,14 @@ export class MessagingService {
       },
     });
 
+    // Esta es la ÚNICA notificación que llega a alguien sin relación previa con
+    // el emisor, con texto que eligió el emisor. Es el canal de phishing del
+    // producto: se sanea y se neutralizan URLs antes de interpolar.
     this.createNotification(
       dto.ownerId,
       'new_request',
       'Nueva solicitud recibida',
-      `Alguien quiere licenciar "${dto.assetTitle}"`,
+      `Alguien quiere licenciar "${sanitizeForNotification(assetTitle)}"`,
       '/dashboard/requests',
     );
 
@@ -168,7 +180,7 @@ export class MessagingService {
       recipientId,
       'new_message',
       'Nuevo mensaje',
-      `Tenés un nuevo mensaje en la solicitud de "${request.assetTitle}"`,
+      `Tenés un nuevo mensaje en la solicitud de "${sanitizeForNotification(request.assetTitle)}"`,
       '/dashboard/requests',
     );
 
@@ -212,10 +224,11 @@ export class MessagingService {
     });
 
     // Notify the requester of status changes
+    const titulo = sanitizeForNotification(request.assetTitle);
     const statusMessages: Record<string, { title: string; body: string }> = {
-      accepted: { title: 'Solicitud aceptada', body: `Tu solicitud de "${request.assetTitle}" fue aceptada` },
-      rejected: { title: 'Solicitud rechazada', body: `Tu solicitud de "${request.assetTitle}" fue rechazada` },
-      closed: { title: 'Conversación cerrada', body: `La conversación sobre "${request.assetTitle}" fue cerrada` },
+      accepted: { title: 'Solicitud aceptada', body: `Tu solicitud de "${titulo}" fue aceptada` },
+      rejected: { title: 'Solicitud rechazada', body: `Tu solicitud de "${titulo}" fue rechazada` },
+      closed: { title: 'Conversación cerrada', body: `La conversación sobre "${titulo}" fue cerrada` },
     };
 
     if (statusMessages[dto.status]) {
@@ -253,12 +266,19 @@ export class MessagingService {
     });
   }
 
-  async getNotifications(userId: string, limit = 20) {
+  async getNotifications(userId: string, limit: any = 20) {
+    // `@Query('limit')` con `transform: true` entrega el resultado de Number():
+    // `?limit=abc` llegaba como NaN y Prisma reventaba con un 500, y
+    // `?limit=1000000` pedía un millón de filas en un endpoint que el frontend
+    // pollea cada 30 segundos. El default del parámetro no cubre ninguno de los
+    // dos casos porque NaN no es `undefined`.
+    const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 20), MAX_NOTIFICATIONS);
+
     const [notifications, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
-        take: limit,
+        take: safeLimit,
       }),
       this.prisma.notification.count({ where: { userId, read: false } }),
     ]);

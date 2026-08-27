@@ -14,6 +14,10 @@ import {
 import { MessagingService } from './messaging.service';
 import { UserContextGuard, AdminGuard } from '../../common/user-context.guard';
 import {
+  CreateRequestRateLimitGuard,
+  SendMessageRateLimitGuard,
+} from '../../common/rate-limit.guard';
+import {
   CreateRequestDto,
   SendMessageDto,
   UpdateRequestStatusDto,
@@ -24,7 +28,11 @@ import {
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
 
+  // Cada alta notifica a `ownerId`, que lo declara el cliente y no se valida
+  // contra assets-service. Sin cupo por usuario, un atacante inunda la bandeja
+  // de cualquier usuario que elija. Ver rate-limit.guard.ts.
   @Post()
+  @UseGuards(CreateRequestRateLimitGuard)
   @HttpCode(HttpStatus.CREATED)
   createRequest(
     @Headers('x-user-id') userId: string,
@@ -85,7 +93,10 @@ export class MessagingController {
     return this.messagingService.findRequestById(id, userId);
   }
 
+  // Cada mensaje notifica a la contraparte: el hilo es un canal de spam contra
+  // alguien con quien ya hay relación. Mismo criterio de cupo.
   @Post(':id/messages')
+  @UseGuards(SendMessageRateLimitGuard)
   @HttpCode(HttpStatus.CREATED)
   sendMessage(
     @Param('id') requestId: string,

@@ -33,6 +33,12 @@ model LicenseRequest {
   // findRequestsByUser filtra por requesterId/ownerId y ordena por updatedAt.
   @@index([requesterId, updatedAt])
   @@index([ownerId, updatedAt])
+  // Cupo de escritura por usuario (CreateRequestRateLimitGuard): cuenta altas
+  // por requester en una ventana de tiempo, y altas por requester hacia un
+  // mismo titular. Sin estos indices el control de spam hace Seq Scan en cada
+  // POST /requests.
+  @@index([requesterId, createdAt])
+  @@index([requesterId, ownerId])
   @@map("license_requests")
 }
 
@@ -51,6 +57,8 @@ model Message {
   // sin esto, el count de getUnreadCount hacía Seq Scan sobre toda la tabla de
   // mensajes en cada poll.
   @@index([requestId, readAt])
+  // Cupo de mensajes por emisor (SendMessageRateLimitGuard).
+  @@index([senderId, createdAt])
   @@map("messages")
 }
 

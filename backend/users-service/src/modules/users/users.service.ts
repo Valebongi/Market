@@ -82,14 +82,55 @@ export class UsersService {
     }
   }
 
-  async findById(userId: string) {
+  /**
+   * `GET /users/:userId`.
+   *
+   * Es una ruta PÚBLICA (el gateway la excluye de auth para que la ficha del
+   * activo muestre al titular a un visitante anónimo). Antes devolvía el perfil
+   * COMPLETO — incluyendo `contactEmail`, `status`, y las preferencias de
+   * notificación — así que cualquier anónimo podía enumerar UUIDs y cosechar
+   * los emails de todos los usuarios. El frontend público solo lee
+   * displayName/bio/avatarUrl y las redes, nunca esos campos.
+   *
+   * Ahora se proyecta:
+   *   - Anónimo / cualquier tercero  → subconjunto público (sin PII de contacto,
+   *     sin estado de cuenta, sin preferencias).
+   *   - El propio dueño o un admin    → perfil completo, para que la página de
+   *     ajustes y el panel sigan funcionando.
+   *
+   * La identidad sale de los headers `x-user-*` que inyecta el gateway; si no
+   * llegan (hoy la ruta está excluida del middleware, ver reporte), todos caen
+   * al subconjunto público — que es el lado seguro.
+   */
+  async findById(userId: string, requesterId?: string, requesterRole?: string) {
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
       include: { notificationSettings: true },
     });
 
     if (!profile || profile.deletedAt) throw new NotFoundException('User not found');
-    return profile;
+
+    const isSelf = !!requesterId && requesterId === userId;
+    const isAdmin = requesterRole === 'admin';
+    if (isSelf || isAdmin) return profile;
+
+    // Proyección pública: sin contactEmail, status, notificationSettings,
+    // deletedAt, updatedAt ni el id interno de fila.
+    return {
+      userId: profile.userId,
+      role: profile.role,
+      displayName: profile.displayName,
+      bio: profile.bio,
+      avatarUrl: profile.avatarUrl,
+      website: profile.website,
+      location: profile.location,
+      linkedin: profile.linkedin,
+      twitter: profile.twitter,
+      github: profile.github,
+      assetCount: profile.assetCount,
+      licenseCount: profile.licenseCount,
+      createdAt: profile.createdAt,
+    };
   }
 
   async findAll(filters: {

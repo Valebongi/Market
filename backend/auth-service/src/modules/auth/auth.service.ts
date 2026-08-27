@@ -14,6 +14,19 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+/**
+ * Hash bcrypt (coste 12) de un valor arbitrario, contra el que se compara
+ * cuando la cuenta NO existe o no tiene passwordHash (cuentas solo-OAuth).
+ *
+ * Sin esto, `login` era un oráculo de enumeración por tiempo: un email
+ * inexistente cortaba en el `findUnique` y respondía en ~5 ms, mientras que uno
+ * REAL disparaba `bcrypt.compare` (~340 ms con coste 12). Esa diferencia de ~60x
+ * revela qué emails están registrados aunque el mensaje de error sea idéntico.
+ * Comparar siempre contra un hash del mismo coste iguala el tiempo de respuesta.
+ */
+const DUMMY_PASSWORD_HASH =
+  '$2b$12$jOzfrP4fYcV7Z13c5wrUb.wQJ2Thmg7MhvsTh151DwEBAJ9jd3rce';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -77,6 +90,16 @@ export class AuthService {
       include: { profile: true },
     });
 
+    // Se corre bcrypt SIEMPRE, antes de cualquier rama, para que el tiempo de
+    // respuesta no dependa de si la cuenta existe. Contra un usuario real se
+    // compara su hash; contra uno inexistente o solo-OAuth, contra el hash
+    // señuelo (mismo coste). Así se cierra la enumeración por tiempo: todas las
+    // credenciales inválidas tardan lo mismo, exista o no el email.
+    const passwordMatch = await bcrypt.compare(
+      dto.password,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+
     // `deletedAt` se trata igual que "no existe": mismo mensaje y mismo código,
     // para no revelar que la cuenta existió. Hasta este fix el campo no se leía
     // en ningún lado, así que un usuario borrado seguía logueándose normal.
@@ -88,7 +111,6 @@ export class AuthService {
       throw new UnauthorizedException('Cuenta suspendida. Contacta al soporte.');
     }
 
-    const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatch) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
