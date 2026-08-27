@@ -271,9 +271,11 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Input
                       label="LinkedIn"
+                      type="url"
                       value={profile.linkedin}
                       onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
                       placeholder="https://linkedin.com/in/usuario"
+                      helperText="Sólo las URL de linkedin.com muestran el sello de verificado en tu perfil público."
                     />
                     <Input
                       label="Twitter / X"
