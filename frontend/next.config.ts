@@ -35,10 +35,49 @@ function httpAssetsPattern() {
 
 const assetsHttpPattern = httpAssetsPattern();
 
+/**
+ * Content-Security-Policy — subconjunto deliberadamente parcial.
+ *
+ * NO incluye `script-src` ni `default-src`. El App Router de Next inyecta
+ * scripts inline con la data de hidratación (`self.__next_f.push(...)`), así que
+ * un `script-src` sin `'unsafe-inline'` tira la app entera, y CON `'unsafe-inline'`
+ * no aporta nada contra XSS. Hacerlo bien pide nonces por request, o sea
+ * `middleware.ts` (que hoy no existe) y renderizado dinámico en todas las rutas
+ * — eso mata el cacheo estático del catálogo. Es un cambio de arquitectura, no
+ * una cabecera: queda reportado, no lo decide este archivo.
+ *
+ * Lo que sí entra son las directivas de alto valor y riesgo de rotura nulo,
+ * verificadas contra el código actual:
+ *
+ * - `base-uri 'none'`: un `<base href="//evil.tld">` inyectado reescribe TODAS
+ *   las URLs relativas de la página (scripts incluidos). Next nunca emite `<base>`.
+ * - `object-src 'none'`: mata `<object>`/`<embed>` como vector de script.
+ * - `frame-ancestors 'none'`: clickjacking. Equivalente moderno del
+ *   `X-Frame-Options: DENY` de abajo, que los browsers nuevos ya ignoran.
+ * - `form-action 'self'`: un formulario inyectado no puede exfiltrar a otro
+ *   host. Todos los formularios de la app se manejan por `onSubmit`, ninguno
+ *   tiene `action` nativo, así que no hay envío cross-origin que romper.
+ * - `upgrade-insecure-requests`: acompaña al HSTS que ya está puesto. Va sólo en
+ *   producción. `localhost` es un origen "potentially trustworthy" y la spec no
+ *   lo upgradea, pero en dev el assets-service puede quedar detrás de otro host
+ *   en texto plano — y ahí el upgrade rompe las imágenes sin avisar.
+ */
+const CONTENT_SECURITY_POLICY = [
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  ...(isProduction ? ["upgrade-insecure-requests"] : []),
+].join("; ");
+
 const nextConfig: NextConfig = {
   // Requerido por frontend/Dockerfile: produce .next/standalone/server.js.
   // Sin esto el `COPY --from=builder /app/.next/standalone ./` falla y la imagen no se construye.
   output: "standalone",
+
+  // `X-Powered-By: Next.js` le regala al atacante el framework y, combinado con
+  // el hash de los chunks, acota bastante la versión. No cuesta nada sacarlo.
+  poweredByHeader: false,
 
   images: {
     remotePatterns: [
@@ -77,6 +116,7 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
+          { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

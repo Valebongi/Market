@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { authService as authApi } from "@/services/auth.service";
+import { safeReturnTo } from "@/lib/security";
 import type { AuthUser } from "@/types";
 
 interface AuthState {
@@ -51,28 +52,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user, token, loading: false });
   }, []);
 
+  /**
+   * Único punto de redirección post-autenticación.
+   *
+   * `returnTo` viaja por querystring (`/login?returnTo=`, `/register?returnTo=`,
+   * y el `state` del OAuth de GitHub que termina en `/oauth-success?returnTo=`),
+   * o sea que lo controla quien arma el link. Sin normalizar, un
+   * `?returnTo=https://evil.tld` convierte a la app en una redirección abierta:
+   * el usuario hace clic en un link de vinciinventa.com, se autentica de verdad
+   * y termina en el sitio del atacante — que es el pretexto ideal para pedirle
+   * la contraseña "otra vez".
+   *
+   * `safeReturnTo` colapsa cualquier destino externo al fallback interno.
+   */
+  const navigateTo = useCallback(
+    (returnTo: string | undefined, replace = false) => {
+      const target = safeReturnTo(returnTo);
+      if (replace) router.replace(target);
+      else router.push(target);
+    },
+    [router]
+  );
+
   const login = useCallback(async (email: string, password: string, returnTo?: string) => {
     const res = await authApi.login({ email, password });
     persist(res.data.accessToken, res.data.user);
-    router.push(returnTo || "/dashboard");
-  }, [persist, router]);
+    navigateTo(returnTo);
+  }, [persist, navigateTo]);
 
   const register = useCallback(async (data: { name: string; email: string; password: string; role: string }, returnTo?: string) => {
     const res = await authApi.register(data);
     persist(res.data.accessToken, res.data.user);
-    router.push(returnTo || "/dashboard");
-  }, [persist, router]);
+    navigateTo(returnTo);
+  }, [persist, navigateTo]);
 
   const loginWithOAuth = useCallback(async (provider: string, providerId: string, email: string, name: string, returnTo?: string) => {
     const res = await authApi.oauthCallback({ provider, providerId, email, name });
     persist(res.data.accessToken, res.data.user);
-    router.push(returnTo || "/dashboard");
-  }, [persist, router]);
+    navigateTo(returnTo);
+  }, [persist, navigateTo]);
 
   const setSession = useCallback((token: string, user: AuthUser, returnTo?: string) => {
     persist(token, user);
-    router.replace(returnTo || "/dashboard");
-  }, [persist, router]);
+    navigateTo(returnTo, true);
+  }, [persist, navigateTo]);
 
   const logout = useCallback(() => {
     localStorage.removeItem("davinci_token");

@@ -5,6 +5,7 @@ import React from "react";
 import Link from "next/link";
 import { Bell, CheckCheck, MessageSquare, FileText, CheckCircle, XCircle, X } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { safeInternalHref } from "@/lib/security";
 import { useNotifications } from "@/lib/notifications-context";
 import type { AppNotification } from "@/services/requests.service";
 import EmptyState from "./EmptyState";
@@ -106,8 +107,14 @@ function NotifItem({ notification: n, onClose }: { notification: AppNotification
     </div>
   );
 
-  return n.link ? (
-    <Link href={n.link} onClick={onClose}>
+  // `link` viene de un registro de la tabla `notifications` y se renderiza en un
+  // panel autenticado. Sólo se linkea si es una ruta interna: así una
+  // notificación con un destino absoluto no puede sacar al usuario del sitio
+  // desde dentro del dashboard.
+  const href = safeInternalHref(n.link);
+
+  return href ? (
+    <Link href={href} onClick={onClose}>
       {content}
     </Link>
   ) : (

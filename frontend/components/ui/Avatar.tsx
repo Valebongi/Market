@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cn, getInitials } from "@/lib/utils";
+import { safeImageSrc } from "@/lib/security";
 
 interface AvatarProps {
   src?: string | null;
@@ -32,10 +33,15 @@ function nameToColor(name: string): string {
 export default function Avatar({ src, name, size = "md", className }: AvatarProps) {
   const { container, text } = sizeMap[size];
 
-  if (src) {
+  // `src` es el `avatarUrl` del perfil: lo escribe el usuario. Si no es una ruta
+  // del sitio ni una URL http(s), se cae a las iniciales en vez de pasarle un
+  // esquema arbitrario al optimizador de imágenes.
+  const imageSrc = safeImageSrc(src);
+
+  if (imageSrc) {
     return (
       <div className={cn("relative rounded-full overflow-hidden flex-shrink-0", container, className)}>
-        <Image src={src} alt={name} fill className="object-cover" />
+        <Image src={imageSrc} alt={name} fill className="object-cover" />
       </div>
     );
   }
