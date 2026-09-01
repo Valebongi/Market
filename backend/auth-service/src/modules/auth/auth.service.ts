@@ -15,6 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AssignableRole } from './dto/update-role.dto';
+import { AssignableStatus } from './dto/update-status.dto';
 
 /**
  * Hash bcrypt (coste 12) de un valor arbitrario, contra el que se compara
@@ -34,12 +35,13 @@ const DUMMY_PASSWORD_HASH =
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Resultado de replicar el rol al perfil de users-service.
+ * Resultado de replicar al perfil de users-service un cambio administrativo
+ * (rol o estado de cuenta).
  *   ok               -> el perfil del panel quedo alineado con auth-service.
- *   failed           -> users-service rechazo o no respondio. El rol en
+ *   failed           -> users-service rechazo o no respondio. El cambio en
  *                       auth-service (la fuente de verdad) YA quedo aplicado.
  *   skipped_no_token -> falta INTERNAL_SERVICE_TOKEN en auth-service, asi que
- *                       ni se intento. Tambien deja el rol aplicado.
+ *                       ni se intento. Tambien deja el cambio aplicado.
  */
 export type ProfileSyncOutcome = 'ok' | 'failed' | 'skipped_no_token';
 
@@ -47,6 +49,9 @@ export type ProfileSyncOutcome = 'ok' | 'failed' | 'skipped_no_token';
 export class AuthService {
   /** Contexto propio para que el rastro de auditoria de roles sea grepeable. */
   private readonly logger = new Logger('auth:admin-role');
+
+  /** Idem para suspensiones/reactivaciones, que son otra clase de evento. */
+  private readonly statusLogger = new Logger('auth:admin-status');
 
   constructor(
     private readonly prisma: PrismaService,
@@ -527,6 +532,140 @@ export class AuthService {
   }
 
   /**
+   * Suspension y reactivacion administrativa. ESTE es el estado que manda.
+   *
+   * POR QUE EXISTE
+   * `status` vive en dos lados: `users.status` (aca) y `user_profiles.status`
+   * (users-service). El que corta el acceso es este: `login` y `oauthLogin` lo
+   * leen antes de emitir un token. El de users-service es el que muestra y
+   * filtra el panel.
+   * `PATCH /api/v1/users/:userId/status` escribia SOLO esa copia, y nadie del
+   * lado de auth la miraba: suspender desde el panel cambiaba el badge de la UI
+   * y NADA MAS. El suspendido seguia logueandose con normalidad. O sea, una
+   * medida de seguridad que no cortaba nada — el peor tipo de bug, porque el
+   * admin ve confirmada una accion que no ocurrio.
+   *
+   * Este metodo cierra ese hueco con la misma jugada que `adminUpdateRole`:
+   * escribir la fuente de verdad primero y replicar la copia despues.
+   *
+   * ALCANCE REAL DE LA SUSPENSION — leer antes de prometerle nada a nadie:
+   *   - Corta al instante: `login` y `oauthLogin`. Cero sesiones nuevas.
+   *   - NO corta: los JWT ya emitidos. El gateway valida la firma localmente y
+   *     no consulta esta base, asi que una sesion abierta sigue operando hasta
+   *     que el token expire (`JWT_EXPIRES_IN`, 7d por defecto). `validateToken`
+   *     de este mismo servicio SI confronta el token con `status`, pero hoy no
+   *     tiene un solo llamador (`GET /auth/validate` se retiro), asi que no
+   *     participa. Suspender frena el ingreso, no la sesion en curso.
+   * Eso viaja en la respuesta y no se deja librado a que alguien lo suponga.
+   */
+  async adminUpdateStatus(
+    identifier: string,
+    status: AssignableStatus,
+    requesterRole?: string,
+    requesterId?: string,
+    requesterEmail?: string,
+  ) {
+    if (requesterRole !== 'admin') {
+      throw new ForbiddenException('Se requiere rol admin');
+    }
+
+    // Igual que en el cambio de rol: sin `x-user-id` no se puede evaluar la
+    // guarda de auto-operacion, y una guarda que se desactiva omitiendo un
+    // header no es una guarda. Falla cerrado.
+    if (!requesterId) {
+      throw new ForbiddenException('Falta la identidad del solicitante');
+    }
+
+    const user = await this.findByIdentifier(identifier);
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // Una cuenta dada de baja ya no puede loguearse por `deletedAt`; suspenderla
+    // no agrega nada y reactivarla no la devuelve al aire (el corte de
+    // `deletedAt` es anterior al de `status`). Aceptar la operacion devolveria
+    // un 200 que el panel leeria como "cuenta reactivada" sobre un usuario que
+    // sigue sin poder entrar. Se corta explicito.
+    if (user.deletedAt) {
+      throw new BadRequestException(
+        'La cuenta esta dada de baja; restaurala antes de cambiarle el estado',
+      );
+    }
+
+    // Auto-operacion bloqueada en LAS DOS direcciones, no solo la suspension.
+    //
+    // Suspenderse a si mismo: mismo motivo que no poder borrarse ni degradarse
+    // — el admin queda afuera y no puede deshacerlo.
+    //
+    // Reactivarse a si mismo: es el que de verdad importa. Como el gateway no
+    // consulta la base, un admin recien suspendido conserva un JWT valido con
+    // rol admin durante dias. Si pudiera operar sobre su propia cuenta, su
+    // primer movimiento seria levantarse la suspension, y la sancion entre
+    // admins no existiria. Con esta guarda hace falta un segundo admin para
+    // revertirla, que es exactamente el punto.
+    if (user.id === requesterId) {
+      throw new BadRequestException(
+        'No podes cambiar el estado de tu propia cuenta. Pediselo a otro admin.',
+      );
+    }
+
+    const previousStatus = user.status;
+    const changed = previousStatus !== status;
+    const suspendiendo = status === 'suspended';
+
+    if (changed) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          status,
+          // Al suspender se quema el reset pendiente, igual que en la baja
+          // administrativa: no tiene sentido dejar viva una via para cambiar la
+          // credencial de una cuenta que acaba de ser bloqueada.
+          ...(suspendiendo ? { resetToken: null, resetTokenExpiry: null } : {}),
+        },
+      });
+    }
+
+    // Auditoria: quien suspendio/reactivo a quien. Identidades (uuid/email),
+    // que es lo que hay que poder reconstruir; ni hashes, ni tokens.
+    this.statusLogger.warn(
+      `${changed ? 'CAMBIO' : 'NO-OP'} de estado: ${previousStatus} -> ${status} ` +
+        `sobre ${user.email} (userId=${user.id}) ` +
+        `por ${requesterEmail ?? 'desconocido'} (requesterId=${requesterId})`,
+    );
+
+    // Se replica tambien en el no-op, por la misma razon que en el rol: si un
+    // intento anterior dejo el perfil desincronizado, repetir la operacion es
+    // la forma de repararlo sin inventar un endpoint de "resincronizar".
+    const profileSync = await this.replicateStatusToUsersService(
+      user.id,
+      status,
+      user.role,
+      user.profile?.displayName ?? user.email.split('@')[0],
+      user.email,
+    );
+
+    return {
+      id: user.id,
+      email: user.email,
+      status,
+      previousStatus,
+      changed,
+      profileSync,
+      // Efecto inmediato y real: no se emiten sesiones nuevas, ni por password
+      // ni por OAuth.
+      loginBlocked: suspendiendo,
+      // Lo que la suspension NO hace, explicito para que el panel pueda decirlo
+      // en pantalla en vez de dejar que el operador lo asuma: no hay revocacion
+      // de sesiones. Un token ya emitido sigue siendo valido para el gateway
+      // hasta que expire.
+      existingSessionsRevoked: false,
+      existingSessionMaxLifetime: this.config.get<string>('JWT_EXPIRES_IN') || '7d',
+    };
+  }
+
+  /**
    * Resuelve un usuario por uuid o email.
    *
    * El email se busca case-insensitive porque el registro lo guarda TAL CUAL lo
@@ -582,29 +721,83 @@ export class AuthService {
    * invisible en su propio panel no sirve). Aca va `forceRole`, que pisa
    * UNICAMENTE `role`. Cambiar un rol no es motivo para reactivar una cuenta
    * suspendida ni para revivir un perfil borrado.
-   *
-   * NUNCA tira: el rol ya esta aplicado en la fuente de verdad y el llamador
-   * necesita saber eso aunque la replicacion falle. El fallo sale por el valor
-   * de retorno y por un log de error.
    */
-  private async replicateRoleToUsersService(
+  private replicateRoleToUsersService(
     userId: string,
     role: AssignableRole,
     displayName: string,
     contactEmail: string,
   ): Promise<ProfileSyncOutcome> {
+    return this.replicateProfileUpsert(
+      this.logger,
+      'rol',
+      userId,
+      { userId, displayName, role, contactEmail, forceRole: true },
+      `role=${role}`,
+    );
+  }
+
+  /**
+   * Replica el estado de cuenta al perfil de users-service. Hermano exacto de
+   * `replicateRoleToUsersService`: mismo canal, mismo secreto, mismo modo de
+   * falla; cambia el flag (`forceStatus`) y el campo que pisa.
+   *
+   * `role` viaja en el body porque `CreateProfileDto` lo exige (es obligatorio:
+   * un perfil no puede nacer sin rol), pero va SIN `forceRole`, asi que en la
+   * rama `update` del upsert no pisa nada. Solo tiene efecto si el perfil no
+   * existia y hay que crearlo — y en ese caso el rol correcto es justamente el
+   * de auth-service, que es la fuente de verdad.
+   *
+   * NUNCA tira: el estado ya esta aplicado donde lo lee el login, y el llamador
+   * necesita saber eso aunque la replicacion falle. El fallo sale por el valor
+   * de retorno (`profileSync`) y por un log de error.
+   */
+  private replicateStatusToUsersService(
+    userId: string,
+    status: AssignableStatus,
+    role: string,
+    displayName: string,
+    contactEmail: string,
+  ): Promise<ProfileSyncOutcome> {
+    return this.replicateProfileUpsert(
+      this.statusLogger,
+      'estado',
+      userId,
+      { userId, displayName, role, contactEmail, status, forceStatus: true },
+      `status=${status}`,
+    );
+  }
+
+  /**
+   * Mecanica compartida de las dos replicaciones administrativas (rol y
+   * estado). Se factorizo cuando aparecio la segunda: son el mismo POST al
+   * mismo endpoint con el mismo secreto y el mismo contrato de fallas, y dos
+   * copias de esto divergen sin que nadie se entere hasta que una de las dos
+   * deja de reportar que fallo.
+   *
+   * `what` es la palabra que entra en los mensajes ("rol" / "estado") y
+   * `detail` el par campo=valor que se audita. NUNCA se loguea el token ni el
+   * body de la respuesta de users-service.
+   */
+  private async replicateProfileUpsert(
+    logger: Logger,
+    what: 'rol' | 'estado',
+    userId: string,
+    body: Record<string, unknown>,
+    detail: string,
+  ): Promise<ProfileSyncOutcome> {
     const usersServiceUrl = this.config.get('USERS_SERVICE_URL', 'http://localhost:3003');
     const internalToken = this.config.get<string>('INTERNAL_SERVICE_TOKEN');
 
-    // users-service rechaza `forceRole` si el no tiene el secreto configurado
-    // (falla cerrado a proposito). Mandarlo sin token es un 403 garantizado, asi
-    // que se corta antes y se dice por que.
+    // users-service rechaza `forceRole`/`forceStatus` si el no tiene el secreto
+    // configurado (falla cerrado a proposito). Mandarlo sin token es un 403
+    // garantizado, asi que se corta antes y se dice por que.
     if (!internalToken) {
-      this.logger.error(
-        `rol NO replicado a users-service: falta INTERNAL_SERVICE_TOKEN. ` +
-          `El rol YA esta aplicado en auth-service y es el que va a llevar el proximo JWT, ` +
-          `pero el panel va a seguir listando el rol viejo (userId=${userId}). ` +
-          `Configura el secreto en los dos servicios y repeti el cambio de rol.`,
+      logger.error(
+        `${what} NO replicado a users-service: falta INTERNAL_SERVICE_TOKEN. ` +
+          `El cambio YA esta aplicado en auth-service, que es lo que decide el login ` +
+          `y el proximo JWT, pero el panel va a seguir mostrando el ${what} viejo ` +
+          `(userId=${userId}). Configura el secreto en los dos servicios y repeti la operacion.`,
       );
       return 'skipped_no_token';
     }
@@ -616,31 +809,25 @@ export class AuthService {
           'Content-Type': 'application/json',
           'x-internal-token': internalToken,
         },
-        body: JSON.stringify({
-          userId,
-          displayName,
-          role,
-          contactEmail,
-          forceRole: true,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         // Se loguea el status, nunca el token ni el body de la respuesta.
-        this.logger.error(
-          `users-service rechazo la replicacion del rol: HTTP ${res.status} ` +
-            `(userId=${userId}, role=${role}). El rol quedo aplicado en auth-service; ` +
-            `el panel va a listar el rol viejo hasta que se repita el cambio.`,
+        logger.error(
+          `users-service rechazo la replicacion del ${what}: HTTP ${res.status} ` +
+            `(userId=${userId}, ${detail}). El cambio quedo aplicado en auth-service; ` +
+            `el panel va a mostrar el ${what} viejo hasta que se repita la operacion.`,
         );
         return 'failed';
       }
 
       return 'ok';
     } catch {
-      this.logger.error(
-        `no se pudo contactar a users-service para replicar el rol ` +
-          `(userId=${userId}, role=${role}). El rol quedo aplicado en auth-service; ` +
-          `el panel va a listar el rol viejo hasta que se repita el cambio.`,
+      logger.error(
+        `no se pudo contactar a users-service para replicar el ${what} ` +
+          `(userId=${userId}, ${detail}). El cambio quedo aplicado en auth-service; ` +
+          `el panel va a mostrar el ${what} viejo hasta que se repita la operacion.`,
       );
       return 'failed';
     }

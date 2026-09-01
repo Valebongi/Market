@@ -199,6 +199,32 @@ export class UsersService {
     // `bootstrapAdmin` es el caso especial del primer admin, que ademas
     // normaliza status/deletedAt. Si vinieran los dos, manda el especial.
     const esForceRole = dto.forceRole === true && !esBootstrapAdmin;
+    // `forceStatus` es independiente de `forceRole`: son dos endpoints
+    // administrativos distintos y cada uno replica lo suyo. El bootstrap ya
+    // normaliza `status` por su cuenta, asi que no se combina con el.
+    const esForceStatus = dto.forceStatus === true && !esBootstrapAdmin;
+
+    if (esForceStatus) {
+      // Mismo cerrojo que `forceRole`. Escribir el estado de una cuenta en base
+      // a "no traer headers de gateway" —lo unico que queda en modo backstop—
+      // seria dejar la suspension al alcance de cualquiera con acceso a la red
+      // interna.
+      if (!this.config.get<string>('INTERNAL_SERVICE_TOKEN')) {
+        throw new ForbiddenException(
+          'forceStatus requiere INTERNAL_SERVICE_TOKEN configurado en users-service',
+        );
+      }
+      // Sin `status` no hay nada que forzar. Se corta explicito en vez de
+      // dejar que el flag caiga en un no-op silencioso que el llamador leeria
+      // como sincronizacion exitosa.
+      if (!dto.status) {
+        throw new BadRequestException('forceStatus requiere el campo status');
+      }
+      console.warn(
+        `[users][force-status] replicando estado desde auth-service: ` +
+          `userId=${dto.userId} status=${dto.status}`,
+      );
+    }
 
     if (esForceRole) {
       // Mismo cerrojo que el bootstrap: sin `INTERNAL_SERVICE_TOKEN` el unico
@@ -246,6 +272,11 @@ export class UsersService {
         displayName: dto.displayName,
         role: dto.role,
         contactEmail: dto.contactEmail,
+        // El default del schema es `active`. Si el perfil se materializa recien
+        // ahora por una suspension replicada, tiene que nacer suspendido: al
+        // contrario, la sincronizacion crearia el perfil activo y el panel
+        // mostraria como activa una cuenta que auth-service ya bloqueo.
+        ...(esForceStatus && dto.status ? { status: dto.status } : {}),
         notificationSettings: { create: {} },
       },
       update: {
@@ -264,6 +295,9 @@ export class UsersService {
         // Replicacion de un cambio de rol administrativo. Pisa `role` y nada
         // mas: ni status, ni deletedAt, ni displayName.
         ...(esForceRole ? { role: dto.role } : {}),
+        // Replicacion de una suspension/reactivacion administrativa. Pisa
+        // `status` y nada mas: ni role, ni deletedAt, ni displayName.
+        ...(esForceStatus && dto.status ? { status: dto.status } : {}),
       },
       include: { notificationSettings: true },
     });

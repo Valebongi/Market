@@ -16,6 +16,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { OAuthCallbackDto } from './dto/oauth-callback.dto';
 import { AdminUpdateRoleDto } from './dto/update-role.dto';
+import { AdminUpdateStatusDto } from './dto/update-status.dto';
 import { GoogleIdTokenService } from './oauth/google-id-token.service';
 
 @Controller('auth')
@@ -131,6 +132,56 @@ export class AuthController {
         : `El usuario ya tenia el rol ${result.role}`,
       data: result,
     };
+  }
+
+  /**
+   * Suspension y reactivacion administrativa sobre la FUENTE DE VERDAD del
+   * estado de cuenta. Hermano de `PATCH /auth/users/:identifier/role`: mismo
+   * identificador (uuid o email), misma autorizacion, misma forma de respuesta.
+   *
+   * UN SOLO ENDPOINT PARA LAS DOS DIRECCIONES. El body lleva el estado destino
+   * (`active` | `suspended`). Ver el comentario de `AdminUpdateStatusDto`.
+   *
+   * Contra `PATCH /api/v1/users/:userId/status` (users-service), que escribe la
+   * copia que muestra el panel: este escribe el `status` que leen `login` y
+   * `oauthLogin`. Este replica al otro; el otro no replica a este. Suspender
+   * por el otro endpoint no impide loguearse — por eso existe este.
+   *
+   * Autorizacion: el rol sale del header `x-user-role` que inyecta el gateway
+   * tras validar el JWT. Sin ese header la operacion falla cerrada (403). El
+   * gateway NO tiene esta ruta en su lista de admin-only, asi que el control
+   * real esta aca.
+   *
+   * EFECTO: suspender corta los logins nuevos al instante, pero NO revoca los
+   * JWT ya emitidos — el gateway no consulta la base. La respuesta lo dice
+   * campo por campo (`loginBlocked`, `existingSessionsRevoked`,
+   * `existingSessionMaxLifetime`) para que el panel lo muestre en vez de que el
+   * operador lo suponga.
+   */
+  @Patch('users/:identifier/status')
+  @HttpCode(HttpStatus.OK)
+  async updateUserStatus(
+    @Param('identifier') identifier: string,
+    @Body() dto: AdminUpdateStatusDto,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+    @Headers('x-user-email') requesterEmail: string,
+  ) {
+    const result = await this.authService.adminUpdateStatus(
+      identifier,
+      dto.status,
+      requesterRole,
+      requesterId,
+      requesterEmail,
+    );
+
+    const mensaje = !result.changed
+      ? `La cuenta ya estaba en estado ${result.status}`
+      : result.status === 'suspended'
+        ? `Cuenta suspendida. No puede iniciar sesion, pero su sesion actual sigue viva hasta que expire el token (${result.existingSessionMaxLifetime}).`
+        : 'Cuenta reactivada. Ya puede volver a iniciar sesion.';
+
+    return { statusCode: 200, message: mensaje, data: result };
   }
 
   /**
