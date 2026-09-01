@@ -43,12 +43,16 @@ export class AppModule implements NestModule {
         // Auth routes (handled by auth-service)
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/login', method: RequestMethod.POST },
-        // NO agregar 'auth/oauth/callback' acá: no es un olvido, es intencional.
-        // El endpoint recibe `email` y `providerId` como datos crudos del cliente y
-        // auth-service confía en ellos para emitir un accessToken, así que exponerlo
-        // sin JWT permite tomar cualquier cuenta conociendo solo el email.
-        // Se reabre recién cuando el intercambio del `code` de OAuth se haga
-        // server-side dentro de auth-service.
+        // Pública porque auth-service ya NO confía en los datos que manda el cliente:
+        // recibe el ID token entero del proveedor y verifica firma contra las claves
+        // públicas de Google, emisor, audiencia y expiración antes de emitir nada.
+        // La identidad sale del token verificado, no del body, así que no hace falta
+        // un JWT nuestro para entrar (sería imposible: es el endpoint que lo emite).
+        // SI ESA VERIFICACIÓN SE REMUEVE O SE DEBILITA, esta línea vuelve a salir:
+        // sin ella el body es dato crudo del cliente y basta el email para tomar
+        // cualquier cuenta. El rate limit estricto lo da AUTH_SENSITIVE_PATHS en
+        // common/throttler.config.ts, donde esta ruta ya está listada.
+        { path: 'auth/oauth/callback', method: RequestMethod.POST },
         { path: 'auth/forgot-password', method: RequestMethod.POST },
         { path: 'auth/reset-password', method: RequestMethod.POST },
         // Public user profiles (any visitor can view a user's public profile)

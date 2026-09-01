@@ -417,9 +417,17 @@ servicios las referencien.
 | `JWT_EXPIRES_IN` | `7d` |
 | `FRONTEND_URL` | `https://<frontend>.up.railway.app` |
 | `USERS_SERVICE_URL` | omitir en esta etapa (la llamada falla y se ignora) |
+| `GOOGLE_CLIENT_ID` | mismo valor que `NEXT_PUBLIC_GOOGLE_CLIENT_ID` del frontend |
+
+> **`GOOGLE_CLIENT_ID` es obligatoria si se usa el login con Google.** Es la
+> audiencia (`aud`) contra la que `auth-service` valida el ID token en
+> `POST /auth/oauth/callback`. Sin ella el endpoint responde **503** y el login
+> con Google no funciona. No es un secreto: es el mismo client ID público que ya
+> viaja al browser.
 
 `GOOGLE_CLIENT_SECRET` y `GITHUB_CLIENT_SECRET` de `auth-service/.env.example` no
-hacen falta acá: el intercambio de OAuth lo hace el frontend.
+hacen falta acá: `auth-service` verifica el ID token de Google contra las claves
+públicas del proveedor, sin secreto de por medio.
 
 ---
 
@@ -726,10 +734,12 @@ RATE_LIMIT_AUTH_MAX=5
 ```
 
 El límite **`auth`** se aplica únicamente a `POST /api/v1/auth/login`, `/auth/register`,
-`/auth/forgot-password` y `/auth/reset-password`. Tiene cupo propio, independiente del
-general: agotar el límite navegando activos no bloquea el login, y viceversa.
-El resto de `/auth/*` (`/auth/me`, `/auth/logout`, `/auth/oauth/callback`) solo cae bajo
-el límite general.
+`/auth/forgot-password`, `/auth/reset-password` y `/auth/oauth/callback` (la lista vive en
+`AUTH_SENSITIVE_PATHS`, en `gateway/src/common/throttler.config.ts`). Tiene cupo propio,
+independiente del general: agotar el límite navegando activos no bloquea el login, y viceversa.
+El resto de `/auth/*` (`/auth/me`, `/auth/logout`) solo cae bajo el límite general.
+La comparación es contra el path en minúsculas, así que cambiarle el case a la URL no
+esquiva el límite estricto.
 
 **Granularidad del límite general:** la clave del cupo es *IP + handler del proxy*, y hay
 un handler por servicio (`/auth/*`, `/assets/*`, `/users/*`, `/requests/*`, `/domains/*`,
