@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Patch,
   Delete,
   Param,
   Headers,
@@ -15,6 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { OAuthCallbackDto } from './dto/oauth-callback.dto';
+import { AdminUpdateRoleDto } from './dto/update-role.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -90,6 +92,50 @@ export class AuthController {
       message: result.alreadyDeleted
         ? 'La cuenta ya estaba dada de baja'
         : 'Cuenta dada de baja',
+      data: result,
+    };
+  }
+
+  /**
+   * Cambio de rol administrativo sobre la FUENTE DE VERDAD del rol.
+   *
+   * `:identifier` acepta el userId (uuid) o el email, igual que la baja.
+   *
+   * Contra `PATCH /api/v1/users/:userId/role` (users-service), que escribe la
+   * copia que muestra el panel: este escribe el rol con el que auth-service
+   * firma el JWT y con el que el gateway autoriza. Este endpoint replica al
+   * otro; el otro no replica a este.
+   *
+   * Autorizacion: el rol sale del header `x-user-role` que inyecta el gateway
+   * tras validar el JWT. Sin ese header la operacion falla cerrada (403). El
+   * gateway NO tiene esta ruta en su lista de admin-only, asi que el control
+   * real esta aca.
+   *
+   * El JWT que el usuario afectado ya tiene en la mano NO cambia: sigue
+   * llevando el rol viejo hasta que caduque o hasta que vuelva a loguearse. Por
+   * eso la respuesta trae `tokenRefreshRequired`.
+   */
+  @Patch('users/:identifier/role')
+  @HttpCode(HttpStatus.OK)
+  async updateUserRole(
+    @Param('identifier') identifier: string,
+    @Body() dto: AdminUpdateRoleDto,
+    @Headers('x-user-id') requesterId: string,
+    @Headers('x-user-role') requesterRole: string,
+    @Headers('x-user-email') requesterEmail: string,
+  ) {
+    const result = await this.authService.adminUpdateRole(
+      identifier,
+      dto.role,
+      requesterRole,
+      requesterId,
+      requesterEmail,
+    );
+    return {
+      statusCode: 200,
+      message: result.changed
+        ? `Rol actualizado a ${result.role}. El usuario debe volver a iniciar sesion para que surta efecto.`
+        : `El usuario ya tenia el rol ${result.role}`,
       data: result,
     };
   }

@@ -58,4 +58,34 @@ export class CreateProfileDto {
   @IsOptional()
   @IsBoolean()
   bootstrapAdmin?: boolean;
+
+  /**
+   * SOLO lo manda `PATCH /auth/users/:identifier/role` de auth-service, que es
+   * el endpoint que escribe la FUENTE DE VERDAD del rol (`users.role`, el que
+   * viaja en el JWT). Este flag replica esa decision al perfil que lista el
+   * panel.
+   *
+   * Que hace: pisa `role` en la rama `update` del upsert, para cualquiera de
+   * los tres roles. El comportamiento normal sigue siendo no pisarlo — el
+   * `syncProfileToUsersService` que corre en cada login NO manda este flag, asi
+   * que un login no revierte nada.
+   *
+   * Diferencia con `bootstrapAdmin`, que no es redundante: aquel ademas fuerza
+   * `status=active` y levanta `deletedAt`, porque un primer admin invisible en
+   * su propio panel no sirve para nada. Este toca UNICAMENTE `role`: cambiarle
+   * el rol a alguien no es motivo para reactivarle una cuenta suspendida ni
+   * para revivirle un perfil dado de baja.
+   *
+   * Por que viaja por aca y no por un endpoint nuevo: `POST /users/profiles` es
+   * la unica llamada servicio-a-servicio del MVP. Reusarla evita un segundo
+   * punto de acoplamiento y un segundo secreto que rotar.
+   *
+   * Cerrojo: igual que `bootstrapAdmin`, `UsersService.createProfile` lo
+   * rechaza salvo que `INTERNAL_SERVICE_TOKEN` este configurado en ESTE
+   * servicio — o sea, solo vale en el modo donde `x-internal-token` se verifica
+   * de verdad, nunca en el modo backstop. Falla cerrado.
+   */
+  @IsOptional()
+  @IsBoolean()
+  forceRole?: boolean;
 }

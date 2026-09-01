@@ -195,6 +195,28 @@ export class UsersService {
    */
   async createProfile(dto: CreateProfileDto) {
     const esBootstrapAdmin = dto.bootstrapAdmin === true;
+    // `forceRole` es el caso general (cambio de rol administrativo);
+    // `bootstrapAdmin` es el caso especial del primer admin, que ademas
+    // normaliza status/deletedAt. Si vinieran los dos, manda el especial.
+    const esForceRole = dto.forceRole === true && !esBootstrapAdmin;
+
+    if (esForceRole) {
+      // Mismo cerrojo que el bootstrap: sin `INTERNAL_SERVICE_TOKEN` el unico
+      // control es "no traer headers de gateway", que cualquiera con acceso a
+      // la red interna cumple. Escribir `role` en base a eso es demasiado.
+      if (!this.config.get<string>('INTERNAL_SERVICE_TOKEN')) {
+        throw new ForbiddenException(
+          'forceRole requiere INTERNAL_SERVICE_TOKEN configurado en users-service',
+        );
+      }
+      // Auditoria del lado de users-service. Nunca se loguea el token. Quien
+      // pidio el cambio queda registrado del lado de auth-service, que es donde
+      // se conoce la identidad del admin solicitante.
+      console.warn(
+        `[users][force-role] replicando rol desde auth-service: ` +
+          `userId=${dto.userId} role=${dto.role}`,
+      );
+    }
 
     if (esBootstrapAdmin) {
       // Cerrojo 1: solo en modo token verificado. En el modo backstop
@@ -239,6 +261,9 @@ export class UsersService {
         ...(esBootstrapAdmin
           ? { role: 'admin' as const, status: 'active' as const, deletedAt: null }
           : {}),
+        // Replicacion de un cambio de rol administrativo. Pisa `role` y nada
+        // mas: ni status, ni deletedAt, ni displayName.
+        ...(esForceRole ? { role: dto.role } : {}),
       },
       include: { notificationSettings: true },
     });
