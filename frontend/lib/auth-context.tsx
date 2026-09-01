@@ -15,7 +15,19 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string, returnTo?: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; role: string }, returnTo?: string) => Promise<void>;
-  loginWithOAuth: (provider: string, providerId: string, email: string, name: string, returnTo?: string) => Promise<void>;
+  /**
+   * Punto de entrada de las sesiones que NO nacen de un formulario de esta app:
+   * hoy, el OAuth de Google (`exchangeGoogleCredential` → `setSession`) y el
+   * handoff por cookie del callback de GitHub.
+   *
+   * Acá NO existe un `loginWithOAuth`, y es a propósito. El que había tomaba
+   * `(provider, providerId, email, name)` y posteaba esa identidad autoafirmada
+   * a `/auth/oauth/callback`: el cliente decía de quién era la cuenta y el
+   * backend le creía. Se borró junto con el shape que lo habilitaba. La
+   * identidad ahora la establece auth-service verificando la credencial del
+   * proveedor, y lo único que vuelve al cliente es la sesión ya emitida — que es
+   * lo que recibe esta función.
+   */
   setSession: (token: string, user: AuthUser, returnTo?: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
@@ -86,12 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     navigateTo(returnTo);
   }, [persist, navigateTo]);
 
-  const loginWithOAuth = useCallback(async (provider: string, providerId: string, email: string, name: string, returnTo?: string) => {
-    const res = await authApi.oauthCallback({ provider, providerId, email, name });
-    persist(res.data.accessToken, res.data.user);
-    navigateTo(returnTo);
-  }, [persist, navigateTo]);
-
   const setSession = useCallback((token: string, user: AuthUser, returnTo?: string) => {
     persist(token, user);
     navigateTo(returnTo, true);
@@ -105,8 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const value = useMemo(
-    () => ({ ...state, login, register, loginWithOAuth, setSession, logout, isAuthenticated: !!state.token }),
-    [state, login, register, loginWithOAuth, setSession, logout]
+    () => ({ ...state, login, register, setSession, logout, isAuthenticated: !!state.token }),
+    [state, login, register, setSession, logout]
   );
 
   return (

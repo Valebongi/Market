@@ -38,9 +38,16 @@ export const requestsService = {
       body: JSON.stringify({ status }),
     }),
 
-  unreadCount: () =>
-    apiFetch<number>("/requests/unread-count"),
-
+  /**
+   * `GET /requests/notifications`. Devuelve las notificaciones **y** el
+   * `unreadCount` en la misma respuesta.
+   *
+   * Reemplazó a un `unreadCount()` suelto que pegaba a `/requests/unread-count`
+   * y que ya no llamaba nadie: `NotificationsContext` saca el contador de acá,
+   * y hacer dos requests para dos campos de la misma tabla era un round-trip de
+   * más en un poll cada 30 s. El endpoint sigue existiendo en messaging-service,
+   * pero el frontend no lo consume.
+   */
   getNotifications: (limit = 20) =>
     apiFetch<{ notifications: AppNotification[]; unreadCount: number }>(`/requests/notifications?limit=${limit}`),
 

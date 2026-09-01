@@ -125,54 +125,11 @@ export default function Modal({
   );
 }
 
-// Confirm Modal
-interface ConfirmModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  description: string;
-  confirmLabel?: string;
-  confirmVariant?: "primary" | "destructive";
-  loading?: boolean;
-}
-
-export function ConfirmModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  title,
-  description,
-  confirmLabel = "Confirmar",
-  confirmVariant = "primary",
-  loading = false,
-}: ConfirmModalProps) {
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size="sm"
-      title={title}
-      description={description}
-      footer={
-        <>
-          <button onClick={onClose} className="btn btn-md btn-ghost" disabled={loading}>
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={cn(
-              "btn btn-md",
-              confirmVariant === "destructive" ? "btn-destructive" : "btn-primary"
-            )}
-          >
-            {loading ? "..." : confirmLabel}
-          </button>
-        </>
-      }
-    >
-      <div />
-    </Modal>
-  );
-}
+/*
+ * Acá vivía `ConfirmModal`, un wrapper de confirmación que no importaba nadie.
+ * Los dos flujos destructivos de la app (borrar activo en `dashboard/assets`,
+ * suspender usuario en `admin/users`) usan `<Modal>` directo porque necesitan
+ * cuerpo propio, y `ConfirmModal` renderizaba un `<div />` vacío como children.
+ * Se borró: un atajo que no sirve para los únicos dos casos que existen no es
+ * un atajo. Un `<Modal size="sm">` con `footer` hace lo mismo en 10 líneas.
+ */

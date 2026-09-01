@@ -40,29 +40,14 @@ export function AssetCardSkeleton() {
   );
 }
 
-export function StatCardSkeleton() {
-  return (
-    <div className="bg-white border border-fog-gray rounded-xl p-6">
-      <div className="flex items-start justify-between">
-        <Skeleton className="h-10 w-10 rounded-lg" />
-        <Skeleton className="h-6 w-16 rounded-full" />
-      </div>
-      <div className="mt-4 space-y-2">
-        <Skeleton className="h-8 w-20" />
-        <Skeleton className="h-4 w-32" />
-      </div>
-    </div>
-  );
-}
-
-export function TableRowSkeleton({ cols = 6 }: { cols?: number }) {
-  return (
-    <tr>
-      {Array.from({ length: cols }).map((_, i) => (
-        <td key={i} className="px-4 py-3">
-          <Skeleton className="h-4 w-full" />
-        </td>
-      ))}
-    </tr>
-  );
-}
+/*
+ * `StatCardSkeleton` y `TableRowSkeleton` se borraron: ningún `loading.tsx` ni
+ * estado de carga los importaba. Las pantallas con tablas (`admin/users`,
+ * `admin/assets`, `dashboard/assets`) muestran un spinner o un `EmptyState`
+ * mientras cargan, no un esqueleto de filas.
+ *
+ * Los que SÍ están en uso son `Skeleton` y `AssetCardSkeleton`, que alimentan
+ * los `loading.tsx` de `(public)/assets`, `(public)/assets/[id]` y
+ * `dashboard/explore`. Si vuelve a hacer falta un esqueleto de tabla,
+ * reconstruirlo sobre `<Skeleton>` es más corto que mantener uno sin usar.
+ */

@@ -163,4 +163,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 Textarea.displayName = "Textarea";
 
-export { Input };
+// `Input` sale por `export default` (arriba). El `export { Input }` que había
+// acá era una segunda puerta al mismo componente que no usaba ningún consumidor
+// —los cuatro importan `Input, { Textarea }`— y que invitaba a que la mitad del
+// código lo trajera nombrado y la otra mitad por default.

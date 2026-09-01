@@ -1,5 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
-import type { AssetStatus, LicenseType, UserRole } from "@/types";
+import type { LicenseType } from "@/types";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -35,33 +35,10 @@ export function formatRelativeTime(date: string | Date): string {
   return `hace ${months} ${months === 1 ? "mes" : "meses"}`;
 }
 
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 export function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return num.toString();
-}
-
-export function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength).trimEnd() + "...";
-}
-
-export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 export function getInitials(name: string): string {
@@ -89,15 +66,16 @@ export const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
   temporary: "Temporal",
 };
 
-export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
-  draft: "Borrador",
-  published: "Publicado",
-  flagged: "Revisión",
-  archived: "Archivado",
-};
-
-export const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Administrador",
-  asset_owner: "Titular",
-  entrepreneur: "Emprendedor",
-};
+/**
+ * Etiquetas de `status` y de `role` NO viven acá.
+ *
+ * Existían como `ASSET_STATUS_LABELS` y `ROLE_LABELS` y no las importaba nadie:
+ * los dos únicos lugares que muestran esos valores son `AssetStatusBadge` y
+ * `RoleBadge` (`components/ui/Badge.tsx`), que traen su propio mapa porque
+ * además de la etiqueta necesitan el `variant` de color.
+ *
+ * Las copias ya habían divergido ("Revisión" vs "En Revisión", "Administrador"
+ * vs "Admin"), así que la constante muerta no era una fuente de verdad: era una
+ * segunda respuesta que nadie leía. Si hace falta la etiqueta suelta fuera de un
+ * badge, el lugar es Badge.tsx — exportando el mapa desde donde ya vive.
+ */

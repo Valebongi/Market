@@ -7,7 +7,14 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-export default function Card({
+/**
+ * Contenedor base. **No se exporta**: el único consumidor es `StatCard`, más
+ * abajo en este mismo archivo. Se exportaba junto con `CardHeader`/`CardBody`/
+ * `CardFooter` como un set de composición que nunca se usó — todas las tarjetas
+ * de la app arman su propio `<div>` con las clases que necesitan. Si alguna
+ * pantalla vuelve a necesitar el contenedor, exportarlo es una línea.
+ */
+function Card({
   variant = "elevated",
   hover = false,
   children,
@@ -32,36 +39,6 @@ export default function Card({
       )}
       {...props}
     >
-      {children}
-    </div>
-  );
-}
-
-// Sub-componentes de Card
-interface CardSectionProps {
-  children: ReactNode;
-  className?: string;
-}
-
-export function CardHeader({ children, className }: CardSectionProps) {
-  return (
-    <div className={cn("flex items-center justify-between p-6 pb-4", className)}>
-      {children}
-    </div>
-  );
-}
-
-export function CardBody({ children, className }: CardSectionProps) {
-  return (
-    <div className={cn("px-6 py-4", className)}>
-      {children}
-    </div>
-  );
-}
-
-export function CardFooter({ children, className }: CardSectionProps) {
-  return (
-    <div className={cn("px-6 py-4 pt-0 flex items-center gap-3", className)}>
       {children}
     </div>
   );
