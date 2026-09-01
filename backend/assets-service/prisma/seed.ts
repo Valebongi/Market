@@ -1,3 +1,39 @@
+/**
+ * FIXTURE DE DESARROLLO LOCAL. NO ES CARGA DE CATALOGO.
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Los 20 activos de este archivo son PLACEHOLDERS: contenido inventado para
+ * tener con que trabajar en una base local vacia. No describen inventario real.
+ *
+ * NO CORRER CONTRA PRODUCCION, por dos motivos:
+ *
+ *  1. `ownerId` esta hardcodeado a dos UUIDs de cuentas de desarrollo. En otra
+ *     base esos usuarios no existen: el frontend pide el perfil, recibe 404 y
+ *     la ficha muestra "Titular 8ce308" en vez de un nombre.
+ *
+ *  2. Siembra `viewCount` y `requestCount` inventados (312 vistas, 18
+ *     solicitudes...). Esos contadores son PRUEBA SOCIAL: el detalle publico
+ *     renderiza "N solicitudes recibidas" y `AssetCard` pone la insignia
+ *     "Muy solicitado" a partir de ellos. Inflarlos en produccion es mentirle
+ *     al visitante. La via sancionada para produccion —`scripts/load-catalog.mjs`—
+ *     los tiene explicitamente en su lista de campos PROHIBIDOS.
+ *
+ * Para cargar catalogo real: `scripts/load-catalog.mjs`. Entra por la API, asi
+ * que pasa por el DTO, el ValidationPipe, la generacion de slug y la regla de
+ * titularidad. Ver `scripts/README.md`.
+ *
+ * Los cuatro `seed*.sql` que acompanaban a este archivo (`seed.sql`,
+ * `seed_digitalaxios.sql`, `seed_tags.sql`, `seed_cover_images.sql`) se
+ * eliminaron en el barrido de codigo muerto: describian el mismo inventario
+ * ficticio por INSERT directo, y `seed_cover_images.sql` ni siquiera era SQL
+ * valido en Postgres (usaba `UPDATE ... LIMIT`, que no existe).
+ *
+ * COMO CORRER (local): este archivo es TypeScript y el servicio no declara
+ * `ts-node` ni un bloque `prisma.seed` en package.json, asi que
+ * `prisma db seed` NO lo levanta. Hay que invocarlo a mano:
+ *
+ *     npx ts-node prisma/seed.ts        # requiere instalar ts-node antes
+ */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

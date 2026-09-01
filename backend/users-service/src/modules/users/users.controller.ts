@@ -20,7 +20,6 @@ import {
 } from './dto/update-profile.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
-import { IncrementCountDto } from './dto/increment-count.dto';
 import { INTERNAL_TOKEN_HEADER } from '../../common/internal-auth';
 
 /**
@@ -128,28 +127,6 @@ export class UsersController {
   ) {
     this.usersService.assertAdmin(requesterRole);
     return this.usersService.updateRole(userId, dto.role);
-  }
-
-  // Internal: increment asset count
-  @Patch(':userId/asset-count')
-  incrementAssetCount(
-    @Param('userId') userId: string,
-    @Headers('x-user-role') requesterRole: string,
-    @Body() dto: IncrementCountDto,
-  ) {
-    this.usersService.assertAdmin(requesterRole);
-    return this.usersService.incrementAssetCount(userId, dto.delta);
-  }
-
-  // Internal: increment license count
-  @Patch(':userId/license-count')
-  incrementLicenseCount(
-    @Param('userId') userId: string,
-    @Headers('x-user-role') requesterRole: string,
-    @Body() dto: IncrementCountDto,
-  ) {
-    this.usersService.assertAdmin(requesterRole);
-    return this.usersService.incrementLicenseCount(userId, dto.delta);
   }
 
   @Delete(':userId')

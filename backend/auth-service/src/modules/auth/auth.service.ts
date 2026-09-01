@@ -152,6 +152,25 @@ export class AuthService {
     };
   }
 
+  /**
+   * Verifica un JWT **contra el estado real de la cuenta**, no solo contra su
+   * firma.
+   *
+   * HOY NO TIENE LLAMADORES, Y ES DELIBERADO. El endpoint que la exponia
+   * (`GET /auth/validate`) se retiro: el gateway valida la firma localmente y
+   * nunca lo llamaba, asi que era un segundo verificador accesible desde afuera,
+   * con su propia semantica (devolvia HTTP 200 con `{statusCode: 401}` en el
+   * body) y sin nadie que lo mantuviera sincronizado con el del gateway.
+   *
+   * La FUNCION se conserva porque es la unica pieza del sistema que confronta un
+   * token con `deletedAt` y `status`. El gateway confia ciegamente en el claim
+   * del JWT, asi que hoy una cuenta borrada o suspendida sigue operando hasta que
+   * su token expire (7 dias por defecto). Cuando se implemente revocacion, esta
+   * es la logica de la que parte — no la firma, que ya esta resuelta.
+   *
+   * Si se decide que la revocacion va por otro camino (claim de version de token,
+   * denylist), esta funcion deja de tener razon de ser y hay que borrarla.
+   */
   async validateToken(token: string) {
     try {
       const payload = this.jwtService.verify(token, {
@@ -163,10 +182,10 @@ export class AuthService {
         include: { profile: true },
       });
 
-      // Cortar acá es lo que hace efectivo el borrado sobre los tokens YA
-      // emitidos: el gateway valida la firma por su cuenta, pero todo servicio
-      // que pase por `/auth/validate` deja de ver al usuario de inmediato en vez
-      // de esperar a que expire el JWT (7 días por defecto).
+      // Este corte es lo que haria efectivo el borrado sobre los tokens YA
+      // emitidos: el gateway valida la firma por su cuenta y no consulta la
+      // base, asi que sin este chequeo un usuario borrado o suspendido sigue
+      // operando hasta que expire el JWT.
       if (!user || user.deletedAt || user.status === 'suspended') {
         throw new UnauthorizedException('Token inválido');
       }

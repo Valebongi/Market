@@ -48,6 +48,17 @@ model Asset {
   restrictions  String[]
   status        AssetStatus @default(draft)
   viewCount     Int         @default(0) @map("view_count")
+  // SIN ESCRITOR desde que se saco `PATCH /assets/:id/request-count` en el
+  // barrido de codigo muerto. Ese endpoint no tenia ni un llamador (ni el
+  // frontend ni messaging-service) y era una via de escritura publica sobre un
+  // contador de PRUEBA SOCIAL: cualquier usuario autenticado inflaba el de
+  // cualquier activo y disparaba la insignia "Muy solicitado" sin crear una
+  // solicitud real.
+  //
+  // La columna se queda: el frontend la lee en la ficha y en las cards, y es
+  // opcion valida de `sortBy`. Hoy vale 0 salvo en filas viejas. El valor real
+  // tiene que DERIVARSE de las solicitudes que vivan en messaging-service, no
+  // escribirse desde el cliente.
   requestCount  Int         @default(0) @map("request_count")
   publishedAt   DateTime?   @map("published_at")
   deletedAt     DateTime?   @map("deleted_at")
@@ -81,6 +92,12 @@ model AssetTag {
   @@map("asset_tags")
 }
 
+// SIN ESCRITOR NI LECTOR (verificado en el barrido de codigo muerto).
+// No hay endpoint que cree adjuntos en ningun servicio, y el frontend no lee el
+// campo. Los `include: { attachments: true }` se sacaron del servicio porque
+// devolvian `[]` y costaban una consulta por lectura de detalle.
+// La tabla se CONSERVA: el adjunto esta declarado como funcionalidad futura y
+// un DROP es irreversible. No la borres sin decision de producto.
 model AssetAttachment {
   id        String   @id @default(uuid())
   assetId   String   @map("asset_id")
@@ -101,6 +118,17 @@ model AssetLink {
   assetId String  @map("asset_id")
   label   String
   url     String
+  // SIN LECTOR. Es SIEMPRE `false`: el frontend manda `isMain: false` literal en
+  // los tres lugares que arman links (toAssetPayload y las dos pantallas del
+  // dashboard) y nada en el producto lo pone en `true`. El unico lector era el
+  // `links: { where: { isMain: true } }` del listado, que por eso devolvia `[]`
+  // para todos los activos siempre; se saco en el barrido de codigo muerto.
+  //
+  // La columna se conserva (un DROP es irreversible) y el campo SIGUE en
+  // `AssetLinkDto`: sacarlo del DTO romperia la creacion de activos hoy mismo,
+  // porque el ValidationPipe corre con `forbidNonWhitelisted` y el frontend
+  // manda `isMain` en cada link. Si algun dia el "link principal" es una
+  // funcionalidad real, esta es la columna; hasta entonces no significa nada.
   isMain  Boolean @default(false) @map("is_main")
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
@@ -114,6 +142,12 @@ model AssetFlag {
   assetId   String   @map("asset_id")
   reportedBy String  @map("reported_by")
   reason    String
+  // SIN ESCRITOR: nadie lo pone en `true`. Es la contracara de que la
+  // moderacion no tenga flujo de resolucion — la revision humana vive en
+  // admin-service y todavia no escribe aca. Se lee en `flag()`
+  // (`where: { resolved: false }`), asi que hoy el filtro es un no-op que
+  // siempre matchea. La columna se conserva: es el estado que va a usar el
+  // flujo de resolucion cuando exista.
   resolved  Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
 

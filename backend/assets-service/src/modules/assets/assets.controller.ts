@@ -23,6 +23,7 @@ import { join } from 'path';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
+import { FilterAssetsDto } from './dto/filter-assets.dto';
 
 /**
  * Tipos de imagen aceptados en el upload, y la extension con la que se GUARDAN.
@@ -48,7 +49,6 @@ const ALLOWED_IMAGE_TYPES: Record<string, string> = {
   'image/webp': '.webp',
   'image/gif': '.gif',
 };
-import { FilterAssetsDto } from './dto/filter-assets.dto';
 
 // Headers injected by the API Gateway after JWT validation
 interface AuthHeaders {
@@ -216,11 +216,6 @@ export class AssetsController {
     @Body() body: { reason: string },
   ) {
     return this.assetsService.flag(id, headers['x-user-id'], body.reason);
-  }
-
-  @Patch(':id/request-count')
-  incrementRequestCount(@Param('id') id: string) {
-    return this.assetsService.incrementRequestCount(id);
   }
 
   @Delete(':id')

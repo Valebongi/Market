@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  Get,
   Patch,
   Delete,
   Param,
@@ -46,16 +45,6 @@ export class AuthController {
       message: 'Login exitoso',
       data: result,
     };
-  }
-
-  @Get('validate')
-  async validate(@Headers('authorization') authHeader: string) {
-    const token = authHeader?.replace('Bearer ', '');
-    if (!token) {
-      return { statusCode: 401, message: 'Token no provisto' };
-    }
-    const user = await this.authService.validateToken(token);
-    return { statusCode: 200, data: user };
   }
 
   @Post('forgot-password')

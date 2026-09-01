@@ -323,20 +323,6 @@ export class UsersService {
     });
   }
 
-  async incrementAssetCount(userId: string, delta: number = 1) {
-    return this.prisma.userProfile.update({
-      where: { userId },
-      data: { assetCount: { increment: delta } },
-    });
-  }
-
-  async incrementLicenseCount(userId: string, delta: number = 1) {
-    return this.prisma.userProfile.update({
-      where: { userId },
-      data: { licenseCount: { increment: delta } },
-    });
-  }
-
   /**
    * Sin el chequeo previo, borrar un userId inexistente llegaba a Prisma como
    * un `update` sin match: P2025 sin capturar = 500. Ahora es 404, y repetir la

@@ -64,11 +64,17 @@ export class UpdateNotificationSettingsDto {
   emailSecurity?: boolean;
 }
 
+/**
+ * Body de `PATCH /users/:userId/status`.
+ *
+ * Tenia un campo `reason` opcional que se validaba y despues se descartaba:
+ * `UsersService.updateStatus` solo lee `status`, y no hay columna donde
+ * guardar un motivo de suspension. Ningun cliente lo mandaba. Un campo que se
+ * acepta y se tira es peor que no tenerlo — hace creer que el motivo queda
+ * registrado en algun lado. Si algun dia hace falta auditar suspensiones, entra
+ * junto con la columna que lo persista.
+ */
 export class UpdateStatusDto {
   @IsEnum(['active', 'suspended'])
   status: string;
-
-  @IsOptional()
-  @IsString()
-  reason?: string;
 }

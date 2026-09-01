@@ -13,10 +13,11 @@ enum UserRole {
   entrepreneur
 }
 
+/// `pending_verification` se retiro: el MVP no verifica email, nada lo escribia
+/// ni lo leia, y `UpdateStatusDto` ya solo aceptaba active|suspended.
 enum UserStatus {
   active
   suspended
-  pending_verification
 }
 
 model UserProfile {
@@ -33,7 +34,12 @@ model UserProfile {
   linkedin     String?
   twitter      String?
   github       String?
-  // Stats (cached counts updated by other services)
+  /// SIN ESCRITOR. Se disenaron para que assets-service y messaging-service los
+  /// mantuvieran, pero el MVP no tiene llamadas cruzadas y los endpoints que los
+  /// incrementaban (`PATCH /users/:userId/{asset-count,license-count}`) nunca
+  /// tuvieron un solo llamador — se retiraron. Valen 0 para todos los usuarios.
+  /// Las columnas quedan porque el panel de admin las MUESTRA (mostrando 0);
+  /// o se cablean o se retiran junto con el frontend. Ver reporte.
   assetCount   Int        @default(0) @map("asset_count")
   licenseCount Int        @default(0) @map("license_count")
   deletedAt    DateTime?  @map("deleted_at")

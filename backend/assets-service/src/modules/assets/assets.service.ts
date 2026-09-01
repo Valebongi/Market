@@ -25,6 +25,21 @@ const SLUG_SEQUENTIAL_ATTEMPTS = 3;
 /** Total de intentos de INSERT. El ultimo va con sufijo aleatorio y no puede fallar por slug. */
 const SLUG_TOTAL_ATTEMPTS = SLUG_SEQUENTIAL_ATTEMPTS + 1;
 
+/**
+ * NOTA — por que ningun `include` trae `attachments`.
+ *
+ * `AssetAttachment` existe en el schema pero NO tiene escritor: no hay endpoint
+ * en este servicio ni en ningun otro que cree adjuntos, y el frontend no lee el
+ * campo en ningun lado. Los `include: { attachments: true }` que estaban en
+ * `create`, `findOne`, `findOneManaged`, `findBySlug` y `update` devolvian
+ * SIEMPRE `[]` y pagaban una consulta extra contra `asset_attachments` en cada
+ * lectura de detalle.
+ *
+ * La tabla se conserva a proposito: el adjunto esta declarado en el diseno como
+ * funcionalidad futura y borrar la tabla es irreversible. Lo que se saco es el
+ * costo, no la puerta. Cuando exista el endpoint de subida, se vuelve a agregar
+ * el include junto con el.
+ */
 @Injectable()
 export class AssetsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -75,7 +90,6 @@ export class AssetsService {
           include: {
             tags: true,
             links: true,
-            attachments: true,
           },
         });
       } catch (error) {
@@ -187,9 +201,20 @@ export class AssetsService {
         skip,
         take: limit,
         orderBy: { [sortBy]: sortOrder },
+        // El listado NO trae `links`. Antes traia
+        // `links: { where: { isMain: true } }`, que aparentaba filtrar el link
+        // principal de cada activo y devolvia `[]` para TODOS, siempre: nada en
+        // el producto pone `isMain` en `true` — el frontend manda `false`
+        // literal en los tres lugares que arman links. Era una consulta por
+        // pagina cuyo resultado ya se conocia.
+        //
+        // El shape que ve el frontend no cambia: `mapAsset` calcula
+        // `externalLinks` y `previewUrls` con `a.links?.filter(...) ?? []`, asi
+        // que un `links` ausente da los mismos dos arrays vacios que daba un
+        // `links: []`. El detalle (`findOne`/`findBySlug`) SI trae los links
+        // completos, que es de donde el frontend los lee de verdad.
         include: {
           tags: true,
-          links: { where: { isMain: true } },
         },
       }),
     ]);
@@ -220,7 +245,6 @@ export class AssetsService {
       include: {
         tags: true,
         links: true,
-        attachments: true,
       },
     });
 
@@ -253,7 +277,6 @@ export class AssetsService {
       include: {
         tags: true,
         links: true,
-        attachments: true,
       },
     });
 
@@ -271,7 +294,6 @@ export class AssetsService {
       include: {
         tags: true,
         links: true,
-        attachments: true,
       },
     });
 
@@ -359,7 +381,6 @@ export class AssetsService {
       include: {
         tags: true,
         links: true,
-        attachments: true,
       },
     });
 
@@ -496,20 +517,5 @@ export class AssetsService {
     });
 
     return { message: 'Asset deleted successfully' };
-  }
-
-  async incrementRequestCount(id: string) {
-    // `update` sobre un id inexistente tira P2025 y el endpoint respondia 500
-    // (y un 500 con id arbitrario es un oraculo de existencia + ruido de logs).
-    // Solo se cuenta sobre un activo vivo y publicado: una solicitud de licencia
-    // se crea contra la ficha publica, que ya exige `published`.
-    const result = await this.prisma.asset.updateMany({
-      where: { id, deletedAt: null, status: 'published' },
-      data: { requestCount: { increment: 1 } },
-    });
-
-    if (result.count === 0) throw new NotFoundException('Asset not found');
-
-    return { message: 'Request count incremented' };
   }
 }
