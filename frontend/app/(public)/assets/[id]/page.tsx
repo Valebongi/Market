@@ -103,10 +103,27 @@ export default async function AssetDetailPage({ params }: PageProps) {
 
   const asset = mapAsset(await fetchAsset(id));
 
+  /**
+   * Locale fijo, igual que `AssetCard` y `FeaturedByDigitalAxios`.
+   *
+   * `toLocaleString()` sin argumentos usa el locale por defecto del entorno que
+   * ejecuta el formateo, así que el mismo activo se veía "12.500" o "12,500"
+   * según dónde se renderizara. En una ficha pública e indexable eso es peor
+   * que en el dashboard: es el precio de otro que dice el titular, mostrado con
+   * dos separadores distintos según quién mire. La moneda sale del activo, no
+   * de un "USD" fijo, que era lo que la card ya hacía bien.
+   *
+   * `free` va aparte y primero, también como en la card: un activo gratuito
+   * caía en el `else` y se anunciaba "A consultar", contradiciendo a la card
+   * que lo lista como "Gratuito" y al JSON-LD de más abajo, que le declara
+   * `price: 0` a Google.
+   */
   const priceDisplay =
-    asset.priceType === "fixed" && asset.priceFixed != null && asset.priceFixed > 0
-      ? `USD ${asset.priceFixed.toLocaleString()}`
-      : "A consultar";
+    asset.priceType === "free"
+      ? "Gratuito"
+      : asset.priceType === "fixed" && asset.priceFixed != null && asset.priceFixed > 0
+        ? `${asset.priceCurrency ?? "USD"} ${Number(asset.priceFixed).toLocaleString("es-AR")}`
+        : "A consultar";
 
   const licenseDetails = [
     { label: "Tipo de Licencia", value: LICENSE_TYPE_LABELS[asset.licenseType as keyof typeof LICENSE_TYPE_LABELS] || asset.licenseType },

@@ -4,7 +4,23 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, Check, Eye, EyeOff } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/http";
 
+/**
+ * Esta pantalla SÍ funciona y queda habilitada, a diferencia de
+ * `/forgot-password`.
+ *
+ * El token que emite auth-service es real (una hora de vigencia) y
+ * `POST /auth/reset-password` lo consume de verdad. Lo que todavía no existe es
+ * el mail que reparte ese token; mientras tanto sigue siendo la pantalla válida
+ * para un enlace entregado por fuera, y es el destino al que va a apuntar el
+ * correo cuando se implemente. Apagarla no arreglaría nada y rompería el único
+ * camino de recuperación que hoy puede completarse.
+ *
+ * La llamada tenía `http://localhost:8080` hardcodeado: en producción le pegaba
+ * a la máquina del propio visitante, así que fallaba siempre. Ahora va por
+ * `apiFetch`, que respeta `NEXT_PUBLIC_API_URL`.
+ */
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -34,19 +50,30 @@ function ResetPasswordForm() {
     }
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8080/api/v1/auth/reset-password", {
+      await apiFetch<{ message?: string }>("/auth/reset-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword: password }),
+        auth: false,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.message || "Token inválido o expirado.");
-      }
       setSuccess(true);
       setTimeout(() => router.push("/login"), 3000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al restablecer la contraseña.");
+      /**
+       * Con `fetch` crudo, quedarse sin red y que el backend rechazara el token
+       * terminaban en el mismo cartel genérico. Son dos situaciones distintas:
+       * en una hay que pedir otro enlace, en la otra hay que reintentar.
+       */
+      if (err instanceof ApiError) {
+        if (err.status === 400) {
+          setError("El enlace no es válido o ya venció. Pedí uno nuevo para volver a intentar.");
+        } else if (err.status === 429) {
+          setError("Demasiados intentos. Esperá unos minutos y probá de nuevo.");
+        } else {
+          setError("No pudimos restablecer la contraseña. Intentá de nuevo en un momento.");
+        }
+      } else {
+        setError("No pudimos conectarnos. Revisá tu conexión e intentá de nuevo.");
+      }
     } finally {
       setLoading(false);
     }

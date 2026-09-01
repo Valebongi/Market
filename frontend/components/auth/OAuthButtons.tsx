@@ -8,6 +8,7 @@ import { describeOAuthError, exchangeGoogleCredential } from "./oauth-login";
 import {
   createOAuthNonce,
   encodeOAuthState,
+  GITHUB_LOGIN_ENABLED,
   OAUTH_NONCE_STORAGE_KEY,
 } from "./oauth-handoff";
 
@@ -44,13 +45,14 @@ declare global {
  * muestra. O sea: viaje completo para terminar en la misma pantalla, sin
  * explicación. Es preferible no dejarlo arrancar y decirle por qué.
  *
- * Para reactivarlo: poner esto en `true` una vez que el callback de GitHub
- * mande una credencial verificable (no un email autoafirmado). La decisión de
- * cómo hacerlo está pendiente del dueño del producto.
+ * Para reactivarlo: poner `GITHUB_LOGIN_ENABLED` en `true` una vez que el
+ * callback de GitHub mande una credencial verificable (no un email
+ * autoafirmado). La decisión de cómo hacerlo está pendiente del dueño del
+ * producto.
+ *
+ * El flag vive en `./oauth-handoff` porque el route handler del callback lo
+ * necesita también, y así no pueden quedar desincronizados.
  */
-// Tipado como `boolean` a proposito: sin la anotacion TS lo estrecha al literal
-// `false` y marca como muerto todo el flujo que queremos conservar intacto.
-const GITHUB_LOGIN_ENABLED: boolean = false;
 
 interface OAuthButtonsProps {
   returnTo?: string;

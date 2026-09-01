@@ -3,6 +3,7 @@ import { safeReturnTo } from "@/lib/security";
 import {
   encodeOAuthHandoff,
   parseOAuthState,
+  GITHUB_LOGIN_ENABLED,
   OAUTH_HANDOFF_COOKIE,
   OAUTH_HANDOFF_MAX_AGE,
   OAUTH_HANDOFF_PATH,
@@ -18,9 +19,34 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v
  * cookie: en resumen, el `state` dejó de ser un `returnTo` disfrazado y pasó a
  * ser el nonce que ata el flujo a la pestaña que lo inició, y la sesión ya no
  * viaja por querystring.
+ *
+ * ## Por qué corta al principio
+ *
+ * El flujo está apagado (`GITHUB_LOGIN_ENABLED`): el POST a
+ * `/auth/oauth/callback` de más abajo manda el shape viejo
+ * (`providerId` + `email` crudos) que el backend rechaza con 400 desde que el
+ * DTO corre con `forbidNonWhitelisted`. O sea que esta ruta no puede terminar
+ * bien, haga lo que haga.
+ *
+ * El problema es lo que hacía en el camino: canjeaba el `code` contra
+ * github.com gastando `GITHUB_CLIENT_SECRET`, se traía el perfil y los emails
+ * de la persona, y recién después se comía el 400. Y el corte por `state` no
+ * alcanza para impedirlo: `parseOAuthState` solo decodifica base64url, no
+ * verifica nada contra el servidor, así que cualquiera puede fabricar un
+ * `state` válido y hacernos quemar el secreto contra GitHub a demanda. El nonce
+ * se verifica recién en `/oauth-success`, que es mucho después.
+ *
+ * Por eso el corte va acá arriba, antes de tocar el secreto y antes de pedirle
+ * nada a GitHub. El resto del handler queda intacto y listo para cuando el
+ * intercambio se mueva a auth-service.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
+
+  if (!GITHUB_LOGIN_ENABLED) {
+    return NextResponse.redirect(new URL("/login?error=oauth_disabled", origin));
+  }
+
   const code = searchParams.get("code");
 
   if (!code) {

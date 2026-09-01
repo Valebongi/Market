@@ -46,6 +46,25 @@
  * importan tanto el route handler como el componente cliente.
  */
 
+/**
+ * Interruptor único del login con GitHub. Vive acá, y no en `OAuthButtons.tsx`,
+ * porque lo necesitan los dos extremos del flujo: el botón (componente cliente)
+ * y `app/api/auth/github/callback/route.ts` (route handler de servidor). Este
+ * módulo es isomórfico y no lleva `"use client"`, así que se puede importar
+ * desde ambos sin arrastrar código de cliente al bundle del servidor.
+ *
+ * Está apagado porque el callback le habla a `/auth/oauth/callback` con el
+ * shape viejo (`providerId` + `email` crudos) que el backend ya rechaza: el DTO
+ * corre con `forbidNonWhitelisted` y devuelve 400. Apagarlo en un solo lugar
+ * evita que el botón y el callback queden desincronizados.
+ *
+ * Para reactivar: poner en `true` cuando el callback mande una credencial
+ * verificable en vez de un email autoafirmado.
+ */
+// Tipado como `boolean` a propósito: sin la anotación TS lo estrecha al literal
+// `false` y marca como muerto todo el flujo que queremos conservar intacto.
+export const GITHUB_LOGIN_ENABLED: boolean = false;
+
 /** Cookie de un solo uso con la sesión recién emitida. */
 export const OAUTH_HANDOFF_COOKIE = "davinci_oauth_handoff";
 
