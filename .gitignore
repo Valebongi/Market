@@ -87,3 +87,10 @@ nul
 # Carpetas con repos embebidos
 # ===========================
 Market/
+
+# ===========================
+# Credenciales OAuth descargadas de Google — NUNCA commitear
+# El JSON que descarga Google Cloud incluye el client_secret en claro.
+# ===========================
+client_secret_*.json
+*.apps.googleusercontent.com.json
