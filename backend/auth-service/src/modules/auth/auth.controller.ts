@@ -17,10 +17,14 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { OAuthCallbackDto } from './dto/oauth-callback.dto';
 import { AdminUpdateRoleDto } from './dto/update-role.dto';
+import { GoogleIdTokenService } from './oauth/google-id-token.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly googleIdToken: GoogleIdTokenService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -140,15 +144,34 @@ export class AuthController {
     };
   }
 
+  /**
+   * Login/alta con Google.
+   *
+   * Recibe el ID token entero (`credential`) y lo verifica acá: firma contra el
+   * JWKS de Google, `iss`, `aud` contra nuestro GOOGLE_CLIENT_ID, `exp` y
+   * `email_verified`. La identidad (`sub`, `email`, `name`) sale de esa
+   * verificación, nunca del body. Ver `oauth/google-id-token.service.ts`.
+   *
+   * Es una ruta pública por definición (nadie tiene sesión todavía), así que la
+   * verificación del token ES el control de acceso; no hay una segunda barrera
+   * más atrás.
+   *
+   * Códigos: 200 sesión emitida · 400 body malformado o provider no soportado ·
+   * 401 token no verificable, vencido, de otra audiencia o email sin verificar ·
+   * 503 GOOGLE_CLIENT_ID sin configurar o claves de Google inalcanzables.
+   */
   @Post('oauth/callback')
   @HttpCode(HttpStatus.OK)
   async oauthCallback(@Body() body: OAuthCallbackDto) {
+    const identity = await this.googleIdToken.verify(body.credential);
+
     const result = await this.authService.oauthLogin(
-      body.provider,
-      body.providerId,
-      body.email,
-      body.name,
+      'google',
+      identity.providerId,
+      identity.email,
+      identity.name,
     );
+
     return {
       statusCode: 200,
       message: 'OAuth login exitoso',

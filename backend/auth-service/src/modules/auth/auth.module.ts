@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AdminBootstrapService } from './admin-bootstrap.service';
+import { GoogleIdTokenService } from './oauth/google-id-token.service';
+import { GoogleJwksService } from './oauth/google-jwks.service';
 
 @Module({
   imports: [
@@ -17,7 +19,7 @@ import { AdminBootstrapService } from './admin-bootstrap.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AdminBootstrapService],
+  providers: [AuthService, AdminBootstrapService, GoogleIdTokenService, GoogleJwksService],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

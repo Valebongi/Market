@@ -182,6 +182,17 @@ export class AuthService {
     }
   }
 
+  /**
+   * Alta o login por OAuth. La identidad que entra acá YA fue verificada
+   * criptográficamente por `GoogleIdTokenService` a partir del ID token: no es
+   * input del cliente. Ver `oauth/google-id-token.service.ts`.
+   *
+   * LINKEO POR EMAIL: si ya existe una cuenta con ese email (registrada con
+   * contraseña, por ejemplo), se le vincula el provider en vez de crear una
+   * segunda cuenta. Eso es correcto SOLO porque el verificador exige
+   * `email_verified`: sin ese chequeo, cualquiera que pudiera declarar el email
+   * de otro heredaría su cuenta por esta rama.
+   */
   async oauthLogin(provider: string, providerId: string, email: string, name: string) {
     // Find or create user via OAuth
     let user = await this.prisma.user.findFirst({
@@ -228,6 +239,13 @@ export class AuthService {
           include: { profile: true },
         });
       }
+    }
+
+    // `login` cortaba a las cuentas suspendidas y esta rama no: una cuenta
+    // suspendida seguía entrando por la puerta de OAuth. Mismo mensaje que
+    // `login` para que la suspensión se comporte igual por los dos caminos.
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException('Cuenta suspendida. Contacta al soporte.');
     }
 
     const token = this.generateToken(user.id, user.email, user.role);
