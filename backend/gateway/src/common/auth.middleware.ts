@@ -29,12 +29,14 @@ const ADMIN_EXACT_ROUTES = [
   '/api/v1/users',
 ];
 
-// Routes that only require authentication (any role)
-const PROTECTED_ROUTES = [
-  '/api/v1/assets',          // POST/PUT/DELETE
-  '/api/v1/requests',
-  '/api/v1/domains',
-];
+// NO agregues acá una lista de "rutas protegidas": no existe tal modelo.
+// Este middleware NO decide qué rutas requieren auth — se aplica a TODO y lo
+// único que lo esquiva es el `.exclude()` de app.module.ts. O sea: la regla es
+// "todo protegido salvo lo excluido explícitamente", y esas dos listas de
+// arriba son el ÚNICO refinamiento (exigir rol admin encima de la auth).
+// Hubo acá una constante PROTECTED_ROUTES que nadie leía: describía un modelo
+// de permisos inexistente y hacía creer que una ruta ausente de la lista
+// quedaba desprotegida (o que agregarla la protegía). Ninguna de las dos.
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {

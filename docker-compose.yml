@@ -1,5 +1,37 @@
 version: '3.9'
 
+# ══════════════════════════════════════════════════════════════════════════
+# EXPOSICIÓN DE PUERTOS — leer antes de tocar cualquier `ports:`
+#
+# Solo DOS servicios se publican en todas las interfaces del host:
+#   · gateway  (8080) — el único borde de la API
+#   · frontend (3000)
+#
+# Postgres y los seis microservicios se publican SOLO en 127.0.0.1. Siguen
+# siendo alcanzables desde la máquina que levanta el stack (psql, prisma
+# migrate, curl a :3002 para depurar), pero NO desde la red.
+#
+# POR QUÉ IMPORTA: los microservicios NO validan el JWT. Confían ciegamente en
+# los headers x-user-id / x-user-email / x-user-role, porque su única fuente
+# legítima es AuthMiddleware del gateway (ver backend/gateway/src/common/
+# identity-headers.ts). Un servicio alcanzable sin pasar por el gateway no
+# tiene autenticación alguna: basta un
+#     curl -H 'x-user-role: admin' http://host:3004/requests
+# para leer las negociaciones de toda la plataforma. Lo mismo en 3001-3006.
+#
+# Antes esos puertos se publicaban como '3004:3004', que Docker interpreta
+# como 0.0.0.0 — todas las interfaces. En un servidor eso es internet, y las
+# reglas de iptables que escribe Docker esquivan a ufw/firewalld, así que un
+# firewall del host NO lo tapa.
+#
+# Producción no usa este compose (se despliega con `railway up` por servicio),
+# pero el archivo tiene que ser seguro igual: es lo primero que alguien corre
+# en un servidor para "probarlo rápido".
+#
+# Si de verdad necesitás llegar a un servicio desde otra máquina, hacelo por
+# un túnel SSH (`ssh -L 3004:127.0.0.1:3004 host`), no ensanchando el bind.
+# ══════════════════════════════════════════════════════════════════════════
+
 services:
   # ─────────────────────── Database ───────────────────────
   postgres:
@@ -11,7 +43,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: postgres
     ports:
-      - '5432:5432'
+      # Postgres: loopback. Con 0.0.0.0 la base queda expuesta con la password del .env.
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init.sql
@@ -41,8 +74,15 @@ services:
       RATE_LIMIT_AUTH_TTL: ${RATE_LIMIT_AUTH_TTL:-60000}
       RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-5}
       RATE_LIMIT_TRUSTED_IPS: ${RATE_LIMIT_TRUSTED_IPS:-}
-      # 1 = hay un reverse proxy (nginx/Caddy) delante. 0 si el gateway se expone directo.
-      TRUST_PROXY: ${TRUST_PROXY:-1}
+      # Default 0 (off) A PROPOSITO. En ESTE compose el gateway se publica
+      # directo en 8080: no hay nginx/Caddy delante. Con trust proxy activado y
+      # sin un proxy real que lo reescriba, Express cree cualquier
+      # X-Forwarded-For que mande el cliente — o sea que el rate limiting
+      # (incluido el estricto de 5/min sobre /auth/login) se esquiva cambiando
+      # un header en cada request. Antes esto defaulteaba a 1.
+      # Subilo a 1 en el .env SOLO si ponés un reverse proxy delante.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      PROXY_TIMEOUT_MS: ${PROXY_TIMEOUT_MS:-30000}
       AUTH_SERVICE_URL: http://auth-service:3001
       ASSETS_SERVICE_URL: http://assets-service:3002
       USERS_SERVICE_URL: http://users-service:3003
@@ -71,7 +111,8 @@ services:
     container_name: davinci_auth
     restart: unless-stopped
     ports:
-      - '3001:3001'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3001:3001'
     environment:
       PORT: 3001
       # OBLIGATORIO. Sin NODE_ENV=production, auth-service devuelve el token
@@ -82,6 +123,24 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       USERS_SERVICE_URL: http://users-service:3003
+      # OBLIGATORIA si se usa login con Google. Es la audiencia (`aud`) esperada
+      # del ID token y tiene que ser EXACTAMENTE el mismo valor que el
+      # NEXT_PUBLIC_GOOGLE_CLIENT_ID que se le pasa al build del frontend.
+      # Si falta, POST /auth/oauth/callback responde 503 — o sea que el compose
+      # armaba un frontend CON botón de Google contra un backend que no podía
+      # autenticar a nadie. No es un secreto: viaja en el bundle del cliente.
+      GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      # Secreto compartido con users-service para la única llamada
+      # servicio-a-servicio (POST /users/profiles). Opcional: si queda vacío en
+      # AMBOS, el registro funciona igual (users-service cae al modo backstop y
+      # rechaza toda request que traiga headers x-user-*), pero la replicación
+      # del rol al perfil que lee el panel de admin no ocurre.
+      # Si se setea, tiene que ser el MISMO valor en los dos servicios.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # Bootstrap del primer admin, de un solo uso (ver admin-bootstrap.service.ts).
+      # Sin esto no hay forma de crear el primer admin: RegisterDto no acepta
+      # role=admin y PATCH /users/:id/role ya exige serlo.
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,7 +159,8 @@ services:
     container_name: davinci_assets
     restart: unless-stopped
     ports:
-      - '3002:3002'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3002:3002'
     environment:
       PORT: 3002
       # Producción por defecto (ver nota en auth-service).
@@ -129,13 +189,17 @@ services:
     container_name: davinci_users
     restart: unless-stopped
     ports:
-      - '3003:3003'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3003:3003'
     environment:
       PORT: 3003
       # Producción por defecto (ver nota en auth-service).
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/davinci_users
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Mismo valor que en auth-service (ver la nota allá). Vacío en ambos = modo
+      # backstop; seteado en ambos = se exige el header x-internal-token.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,7 +218,8 @@ services:
     container_name: davinci_messaging
     restart: unless-stopped
     ports:
-      - '3004:3004'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3004:3004'
     environment:
       PORT: 3004
       # Producción por defecto (ver nota en auth-service).
@@ -179,7 +244,8 @@ services:
     container_name: davinci_domains
     restart: unless-stopped
     ports:
-      - '3005:3005'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3005:3005'
     environment:
       PORT: 3005
       # Producción por defecto (ver nota en auth-service).
@@ -204,7 +270,8 @@ services:
     container_name: davinci_admin
     restart: unless-stopped
     ports:
-      - '3006:3006'
+      # Interno: solo por el gateway. Ver nota de puertos arriba.
+      - '127.0.0.1:3006:3006'
     environment:
       PORT: 3006
       # Producción por defecto (ver nota en auth-service).
