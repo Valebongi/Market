@@ -45,6 +45,102 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+// ── Admin de identidad (auth-service) ─────────────────────────────────
+//
+// `role` y `status` viven DUPLICADOS en dos bases: `auth.users` (auth-service)
+// y `user_profiles` (users-service). Sólo la primera manda:
+//   - el `role` de `auth.users` es el que auth-service firma en el JWT y con el
+//     que el gateway autoriza;
+//   - el `status` de `auth.users` es el que `login`/`oauthLogin` leen antes de
+//     emitir un token.
+// La copia de users-service es la que LISTA y FILTRA el panel, y nada más.
+//
+// Por eso los endpoints de abajo son `/auth/users/...` y no `/users/...`.
+// Escribir la copia sin escribir la fuente de verdad es lo que hacía que el
+// panel mintiera: cambiar un rol no cambiaba el rol efectivo y suspender a
+// alguien no le impedía loguearse.
+
+/**
+ * Resultado de replicar el cambio a la copia de users-service.
+ *
+ * **Sólo `"ok"` significa que el listado del panel va a mostrar el valor
+ * nuevo.** Con `"failed"` o `"skipped_no_token"` el cambio SÍ quedó aplicado
+ * donde importa (auth-service ya lo escribió y no lo revierte), pero
+ * `GET /users` va a seguir devolviendo el valor viejo hasta que la replicación
+ * se repita con éxito — reintentar la misma operación es el modo de repararlo.
+ *
+ * - `ok` → las dos bases coinciden.
+ * - `failed` → users-service rechazó o no respondió.
+ * - `skipped_no_token` → auth-service corre sin `INTERNAL_SERVICE_TOKEN`, así
+ *   que ni siquiera lo intentó. Es un problema de configuración, no de red.
+ */
+export type ProfileSyncOutcome = "ok" | "failed" | "skipped_no_token";
+
+/**
+ * `data` de `PATCH /auth/users/:identifier/role` — el shape crudo del backend.
+ *
+ * **Preferí el `AdminRoleChangeView` que devuelve `authService.adminUpdateRole()`**:
+ * este tipo suelto deja renderizar el resultado sin los avisos que lo
+ * acompañan.
+ */
+export interface AdminRoleChangeResult {
+  /** userId (uuid) de la cuenta afectada, resuelto por el backend. */
+  id: string;
+  /** Email de la cuenta afectada, con la capitalización con la que está guardada. */
+  email: string;
+  /** Rol que quedó escrito en la fuente de verdad. */
+  role: UserRole;
+  /** Rol que tenía antes. Igual a `role` cuando `changed` es `false`. */
+  previousRole: UserRole;
+  /** `false` si la cuenta ya tenía ese rol (no-op idempotente, no un error). */
+  changed: boolean;
+  profileSync: ProfileSyncOutcome;
+  /**
+   * `true` cuando el rol cambió: el JWT que el usuario ya tiene en la mano
+   * sigue llevando el rol viejo hasta que caduque o vuelva a iniciar sesión.
+   * El gateway autoriza por el claim del token, no consultando la base.
+   */
+  tokenRefreshRequired: boolean;
+}
+
+/**
+ * `data` de `PATCH /auth/users/:identifier/status` — el shape crudo del backend.
+ *
+ * **Preferí el `AdminStatusChangeView` que devuelve
+ * `authService.adminUpdateStatus()`**: este tipo suelto deja renderizar
+ * "suspendido" sin decir que la sesión abierta sigue viva.
+ */
+export interface AdminStatusChangeResult {
+  id: string;
+  email: string;
+  /** Estado que quedó escrito en la fuente de verdad (la que lee el login). */
+  status: UserStatus;
+  previousStatus: UserStatus;
+  /** `false` si la cuenta ya estaba en ese estado. */
+  changed: boolean;
+  profileSync: ProfileSyncOutcome;
+  /** `true` mientras la cuenta esté `suspended`: no se emiten sesiones nuevas. */
+  loginBlocked: boolean;
+  /**
+   * **Literal `false`, y no es un placeholder a completar más adelante.**
+   *
+   * Suspender NO revoca los JWT ya emitidos: el gateway valida la firma
+   * localmente y nunca consulta la base de auth. Una sesión abierta sigue
+   * operando con normalidad hasta que el token expire.
+   *
+   * Está tipado como el literal a propósito, para que un
+   * `if (res.existingSessionsRevoked)` narre a `never` en la rama verdadera
+   * en vez de compilar como si algún día pudiera cortar la sesión.
+   */
+  existingSessionsRevoked: false;
+  /**
+   * Cuánto puede seguir viva esa sesión, en el formato de `JWT_EXPIRES_IN`
+   * (`"7d"` por defecto). Es el techo de la ventana en la que una cuenta
+   * suspendida todavía puede escribir.
+   */
+  existingSessionMaxLifetime: string;
+}
+
 // ── Assets ────────────────────────────────────────────────────────────
 export type AssetStatus = "draft" | "published" | "flagged" | "archived";
 export type AssetCategory =

@@ -1,6 +1,26 @@
 import { apiFetch } from "@/lib/http";
 import type { NotificationSettings, UserProfile, UpdateUserProfilePayload } from "@/types";
 
+/**
+ * NO HAY —NI VA A HABER— `updateRole()` NI `updateStatus()` ACÁ.
+ *
+ * `PATCH /users/:userId/role` y `PATCH /users/:userId/status` existen en
+ * users-service y devuelven 200, pero son COSMÉTICOS: escriben
+ * `user_profiles`, que es la copia que este listado muestra y filtra, y que
+ * nadie consulta para autorizar. Verificado en producción:
+ *
+ *   - cambiar el rol por ahí NO cambia el rol efectivo (el que vale es el que
+ *     auth-service firma en el JWT);
+ *   - suspender por ahí NO impide loguearse (el login lee `auth.users.status`).
+ *
+ * O sea, el peor tipo de bug: el panel confirma una acción que no ocurrió.
+ *
+ * La fuente de verdad se escribe con `authService.adminUpdateRole()` y
+ * `authService.adminUpdateStatus()` (`services/auth.service.ts`), que además
+ * replican a esta copia. Envolver los endpoints cosméticos en un método con
+ * nombre razonable sería reabrir el mismo pozo, así que se dejan sin envolver
+ * a propósito.
+ */
 export const usersService = {
   /**
    * `GET /users/:userId` → users-service devuelve el `UserProfile` PLANO
