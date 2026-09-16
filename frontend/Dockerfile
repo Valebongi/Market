@@ -45,6 +45,9 @@ ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ARG NEXT_PUBLIC_GITHUB_CLIENT_ID
+# Analítica/SEO. Opcionales: si faltan no se rinden y el build sigue válido.
+ARG NEXT_PUBLIC_GTM_ID
+ARG NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
 # Opcional. Solo agrega un `remotePattern` http para next/image (uploads sin TLS,
 # típicamente desarrollo). En producción no hace falta: next.config.ts ya cubre
 # `https://**`, y si falta o es inválida el patrón se omite sin romper el build.
@@ -54,6 +57,8 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
     NEXT_PUBLIC_GITHUB_CLIENT_ID=$NEXT_PUBLIC_GITHUB_CLIENT_ID \
+    NEXT_PUBLIC_GTM_ID=$NEXT_PUBLIC_GTM_ID \
+    NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=$NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION \
     ASSETS_SERVICE_URL=$ASSETS_SERVICE_URL
 
 # ⚠️ NUNCA declarar GITHUB_CLIENT_SECRET como ARG/ENV en este stage.

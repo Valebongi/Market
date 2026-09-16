@@ -3,6 +3,10 @@ import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./Providers";
 import { SITE_URL } from "@/lib/site";
+import {
+  GoogleTagManager,
+  GoogleTagManagerNoScript,
+} from "@/components/analytics/GoogleTagManager";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,6 +23,9 @@ const poppins = Poppins({
 
 const DESCRIPTION =
   "La plataforma para intermediar activos intelectuales en Argentina. Conecta titulares con emprendedores para licenciar software, diseños, modelos de negocio y más.";
+
+// Vacío = no se rinde el meta; uno sin valor no verifica nada.
+const GOOGLE_SITE_VERIFICATION = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -73,6 +80,9 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ["/Logo DaVinci.png"],
   },
+  ...(GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: GOOGLE_SITE_VERIFICATION } }
+    : {}),
   icons: {
     icon: "/Logo DaVinci.png",
     apple: "/Logo DaVinci.png",
@@ -91,7 +101,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
+      <GoogleTagManager />
       <body className="min-h-screen bg-white dark:bg-[#0d1117] text-carbon-gray dark:text-gray-100 antialiased transition-colors duration-200">
+        <GoogleTagManagerNoScript />
         <Providers>{children}</Providers>
       </body>
     </html>
