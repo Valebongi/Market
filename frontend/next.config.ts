@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { HTML_LIMITED_BOT_UA_RE_STRING } from "next/dist/shared/lib/router/utils/is-bot";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -70,7 +71,17 @@ const CONTENT_SECURITY_POLICY = [
   ...(isProduction ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
+// Next streamea la metadata y solo la bloquea dentro de <head> para los bots de
+// esta lista. La default no incluye crawlers de auditoría SEO: como no ejecutan
+// JS, leían canonical, robots y description fuera del <head> en /assets.
+// Se extiende la default en vez de reemplazarla para no perder los de Next.
+const HTML_LIMITED_BOTS = new RegExp(
+  `${HTML_LIMITED_BOT_UA_RE_STRING}|Screaming ?Frog|SemrushBot|AhrefsBot|Sitebulb|MJ12bot|DotBot`,
+  "i"
+);
+
 const nextConfig: NextConfig = {
+  htmlLimitedBots: HTML_LIMITED_BOTS,
   // Requerido por frontend/Dockerfile: produce .next/standalone/server.js.
   // Sin esto el `COPY --from=builder /app/.next/standalone ./` falla y la imagen no se construye.
   output: "standalone",

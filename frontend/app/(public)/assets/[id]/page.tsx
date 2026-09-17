@@ -22,6 +22,7 @@ import type { RawAsset } from "@/types";
 import AssetDetailSidebar from "@/components/assets/AssetDetailSidebar";
 import AssetOwnerInline from "@/components/assets/AssetOwnerInline";
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site";
 
 function getYouTubeId(url: string): string | null {
   const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
@@ -55,9 +56,6 @@ async function fetchAsset(id: string): Promise<RawAsset> {
     throw err;
   }
 }
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;

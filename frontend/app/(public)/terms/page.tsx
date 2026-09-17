@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Términos y Condiciones",

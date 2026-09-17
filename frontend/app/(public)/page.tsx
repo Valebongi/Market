@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import LandingMarketplace from "./_components/LandingMarketplace";
 import { serializeJsonLd } from "@/lib/security";
+import { SITE_URL } from "@/lib/site";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://vinciinventa.com";
 const DESCRIPTION =
   "Marketplace de activos intelectuales en Argentina. Software, diseños, marcas y modelos de negocio listos para licenciar. Conectá con titulares y hacé crecer tu proyecto.";
 

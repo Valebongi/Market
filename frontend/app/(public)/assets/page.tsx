@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import AssetCard from "@/components/assets/AssetCard";
 import EmptyState from "@/components/ui/EmptyState";
@@ -11,12 +12,15 @@ import {
   isAssetCategory,
 } from "@/lib/asset-categories";
 import { cn } from "@/lib/utils";
+import { SITE_URL } from "@/lib/site";
+import { serializeJsonLd } from "@/lib/security";
 import CatalogFilterPanel from "./_components/CatalogFilterPanel";
 import CatalogSearchInput from "./_components/CatalogSearchInput";
 import CatalogErrorState from "./_components/CatalogErrorState";
 import CatalogSortSelect from "./_components/CatalogSortSelect";
 import {
   catalogHref,
+  CATALOG_PARAM_KEYS,
   CATALOG_SORT_VALUES,
   DEFAULT_SORT,
   LICENSE_FILTERS,
@@ -95,6 +99,74 @@ function pageWindow(current: number, totalPages: number): number[] {
   return Array.from({ length: size }, (_, i) => start + i);
 }
 
+const CATALOG_DESCRIPTION =
+  "Navegá el catálogo de licencias disponibles: software, diseños, modelos de negocio, contenido y más. Encontrá el activo intelectual perfecto para tu proyecto.";
+const CATALOG_OG_DESCRIPTION =
+  "Navegá el catálogo de licencias disponibles: software, diseños, modelos de negocio y más.";
+
+/**
+ * Toda combinación de filtros es una URL distinta con el mismo título y el
+ * mismo contenido. Cuando el catálogo tenga inventario van a ser decenas.
+ *
+ * El día que una faceta merezca indexarse por demanda de búsqueda real, no se
+ * habilita acá: se le crea su URL limpia y propia. Esta función solo decide
+ * sobre la combinatoria de la querystring, que nunca se indexa.
+ */
+function hasFilters(sp: Record<string, string | string[] | undefined>): boolean {
+  return CATALOG_PARAM_KEYS.some((key) => first(sp[key]) !== "");
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+
+  return {
+    title: "Explorar Activos",
+    description: CATALOG_DESCRIPTION,
+    keywords: [
+      "explorar licencias",
+      "activos intelectuales",
+      "marketplace licencias",
+      "comprar licencias software",
+      "licencias diseño",
+    ],
+    // `noindex, follow` y NO un canonical al catálogo pelado: `follow` conserva
+    // el rastreo de las facetas hacia los activos, y un canonical a otra URL
+    // junto a `noindex` son dos señales que se contradicen.
+    ...(hasFilters(sp)
+      ? { robots: { index: false, follow: true } }
+      : { alternates: { canonical: `${SITE_URL}/assets` } }),
+    openGraph: {
+      title: "Explorar Activos | Da Vinci Inventa",
+      description: CATALOG_OG_DESCRIPTION,
+      url: `${SITE_URL}/assets`,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Explorar Activos | Da Vinci Inventa",
+      description: CATALOG_OG_DESCRIPTION,
+    },
+  };
+}
+
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Inicio", item: SITE_URL },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Explorar Activos",
+      item: `${SITE_URL}/assets`,
+    },
+  ],
+};
+
 export default async function AssetsPage({
   searchParams,
 }: {
@@ -150,6 +222,10 @@ export default async function AssetsPage({
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0d1117]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+      />
       {/* Cabecera */}
       <div className="border-b border-fog-gray dark:border-white/10 bg-white dark:bg-[#0d1117]">
         <div className="container-market py-8">

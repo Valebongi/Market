@@ -83,9 +83,11 @@ export const metadata: Metadata = {
   ...(GOOGLE_SITE_VERIFICATION
     ? { verification: { google: GOOGLE_SITE_VERIFICATION } }
     : {}),
+  // El PNG de 1024x1024 pesa 170 KiB y se servia crudo como favicon en cada
+  // pagina. Sigue siendo el de Open Graph, que si necesita ser grande.
   icons: {
-    icon: "/Logo DaVinci.png",
-    apple: "/Logo DaVinci.png",
+    icon: "/icon-32.png",
+    apple: "/apple-icon-180.png",
   },
   // SIN `alternates.canonical` a proposito. Un canonical en el layout raiz lo
   // hereda toda pagina que no declare el suyo, y como el valor es SITE_URL, esa
@@ -100,7 +102,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
+    <html lang="es-AR" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
       <GoogleTagManager />
       <body className="min-h-screen bg-white dark:bg-[#0d1117] text-carbon-gray dark:text-gray-100 antialiased transition-colors duration-200">
         <GoogleTagManagerNoScript />
