@@ -9,6 +9,11 @@ orquestador la despache al agente dueño del archivo.
 **Orden de despacho recomendado: P0 antes que P1, y P1-09 (slugs) antes de que se
 publique el primer activo.**
 
+> **Estado al 17/09/2026.** Este backlog no se mantuvo al día: de 7 ítems
+> verificados, 6 ya estaban resueltos o partían de un dato incorrecto. Están
+> marcados abajo con **Estado**. Los que no tienen marca **no se verificaron**:
+> antes de despachar cualquiera, contrastarlo con el código y el sitio actual.
+
 ---
 
 ## P0 — Bloqueantes. Sin esto no se puede medir ni evaluar nada
@@ -23,6 +28,7 @@ publique el primer activo.**
 | **Qué se gana** | Sin GSC no se sabe qué se indexó, qué consultas aparecen ni qué errores de rastreo hay. **Es el prerrequisito de todo el programa** |
 | **Evidencia** | Grep sobre el HTML de producción: 0 coincidencias de `google-site-verification` |
 | **Nota** | Requiere acción del dueño del proyecto (crear la propiedad). Alternativa: verificación por DNS TXT, que iría a `gw-infra` |
+| **Estado** | ✅ **Hecho** (16/09/2026, `6ab737d`). Meta tag vía `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`; propiedad de prefijo de URL sobre `https://vinciinventa.com` |
 
 ### P0-02 · Analítica web
 
@@ -34,6 +40,7 @@ publique el primer activo.**
 | **Qué se gana** | Medir el tráfico que el plan pretende generar. Hoy no hay ninguna instrumentación |
 | **Evidencia** | Grep: 0 coincidencias de `gtag`, `googletagmanager`, `plausible`, `umami`, `posthog`, `clarity` |
 | **Nota** | La elección de herramienta es decisión de negocio (costo, privacidad, GDPR) |
+| **Estado** | ✅ **Hecho** (16/09/2026, `6ab737d`). GTM vía `NEXT_PUBLIC_GTM_ID`, con GA4 configurado como tag dentro de GTM. Costo medido: PageSpeed mobile bajó de 94 a 76 |
 
 ### P0-03 · Registro DNS `www` con 301 al ápice
 
@@ -44,6 +51,7 @@ publique el primer activo.**
 | **Cambio** | Crear `www.vinciinventa.com` y redirigir 301 a `https://vinciinventa.com` |
 | **Qué se gana** | Hoy `www` es **NXDOMAIN**. Todo enlace entrante o visita escrita con `www` se pierde entera |
 | **Evidencia** | `nslookup www.vinciinventa.com` → `Non-existent domain` |
+| **Estado** | ✅ **Hecho** (16/09/2026, en Cloudflare). 301 al ápice en un solo salto, preserva path y query |
 
 ---
 
@@ -59,6 +67,7 @@ publique el primer activo.**
 | **Qué se gana** | **174.180 bytes menos en la ruta crítica de cada página.** `next/image` ya emite su propio preload de la versión de 96w; el manual descarga el PNG completo que nunca se usa y compite con el LCP real |
 | **Evidencia** | `curl` al PNG: 174.180 bytes. En el HTML servido conviven los dos `<link rel="preload" as="image">` |
 | **Riesgo** | Ninguno. El comentario del código dice que "refuerza en SSR"; en los hechos duplica |
+| **Estado** | ❌ **Dato incorrecto.** El logo medido pesa 2,4 KiB, no 174 KB. El preload manual ya no está en `layout.tsx`. **No** sacar el `priority` del logo del navbar |
 
 ### P1-05 · Sacar `alternates.canonical` del root layout
 
@@ -69,6 +78,7 @@ publique el primer activo.**
 | **Cambio** | Eliminar `alternates: { canonical: SITE_URL }` del layout raíz. Cada página declara el suyo |
 | **Qué se gana** | Evita que **toda página pública futura sin canonical propio se autocanonicalice a la home y no se indexe nunca**. El plan crea varias páginas nuevas, así que hay que desactivar la mina antes de empezar |
 | **Evidencia** | `/login` y `/register` sirven `<link rel="canonical" href="https://vinciinventa.com"/>` — heredan el del root. Hoy son `noindex`, así que no duele; en una landing nueva sí |
+| **Estado** | ✅ **Ya resuelto.** El root layout no declara `alternates.canonical` |
 
 ### P1-06 · Corregir el fallback de dominio equivocado
 
@@ -79,6 +89,7 @@ publique el primer activo.**
 | **Cambio** | El fallback dice `https://davinci-inventa.com`; debe decir `https://vinciinventa.com`, igual que `robots.ts` y `sitemap.ts` |
 | **Qué se gana** | Un build sin `NEXT_PUBLIC_SITE_URL` emite `metadataBase`, canonicals y OG apuntando a un dominio ajeno. Fallo silencioso y caro |
 | **Evidencia** | Lectura del código. En producción la variable está seteada, así que hoy no se manifiesta |
+| **Estado** | ✅ **Ya resuelto.** El fallback vive en `frontend/lib/site.ts` con `https://vinciinventa.com` |
 
 ### P1-07 · Arreglar los tres enlaces rotos del footer y el navbar
 
@@ -89,6 +100,7 @@ publique el primer activo.**
 | **Cambio** | (a) `/help` → 404 confirmado: crear la página o quitar el enlace. (b) `/#como-funciona` → el ancla no existe en la home: crear la sección o apuntar a `/como-funciona` (ver P1-11). (c) `/dashboard/domains` en el footer público → apunta a una ruta `Disallow` y rebota a login al anónimo. (d) Unificar "Explorar Activos": el navbar va a `/assets` y el footer a `/` |
 | **Qué se gana** | Son enlaces presentes en **todas** las páginas del sitio. Un 404 sitewide desde el footer es la señal de calidad más barata de arreglar |
 | **Evidencia** | `curl /help` → `404`. Los únicos `id` de la home son `main-content`. Inventario de los 16 enlaces de la home en §2.4 del informe |
+| **Estado** | Parcial. (b) ✅ **ya resuelto**: la home tiene la sección `id="como-funciona"`. (a), (c) y (d) sin verificar |
 
 ### P1-08 · `findOne` debe filtrar por `status: 'published'`
 
@@ -123,6 +135,7 @@ publique el primer activo.**
 | **Evidencia** | El archivo es `"use client"`; el catálogo se pide en `useEffect`. HTML medido: 120 palabras, 13 enlaces, 0 a activos, 0 a categorías. No hay `useSearchParams` en ninguna página pública |
 | **Efecto secundario** | Arregla los enlaces `/assets?search=<tag>` del detalle y `/assets?ownerId=...` de la home, que hoy aterrizan sin filtrar |
 | **Regla** | Canonical de toda combinación de filtros a `/assets` (o a la landing de categoría cuando exista). No usar `noindex` en facetas |
+| **Estado** | ⚠️ **La regla no se siguió, a propósito.** Con filtros, `/assets` sirve `noindex, follow` sin canonical; sin filtros, es indexable con canonical propio. El resto del ítem (SSR, paginación con `<Link>`) sin verificar |
 
 ### P1-11 · Crear `/como-funciona`, `/ayuda` y `/publicar`
 

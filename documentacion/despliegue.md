@@ -53,6 +53,8 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 | `FRONTEND_URL` | URL pública del frontend | `https://davinci-inventa.com` |
 | `NEXT_PUBLIC_API_URL` | URL pública de la API (gateway) | `https://davinci-inventa.com/api/v1` |
 | `NEXT_PUBLIC_SITE_URL` | URL pública del sitio (canonical, robots, sitemap) | `https://davinci-inventa.com` |
+| `NEXT_PUBLIC_GTM_ID` | Contenedor de Google Tag Manager (GA4 se configura adentro) | `GTM-XXXXXXX` |
+| `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Token del meta tag de Search Console | (lo da GSC) |
 | `ASSETS_PUBLIC_URL` | URL pública del assets-service | `https://assets.davinci-inventa.com` |
 
 > **`NODE_ENV=production`: seteala igual, pero ya no es lo que tapa el agujero
@@ -491,7 +493,9 @@ interna: ver 3.6.
 | Variable | Valor | Si falta |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `https://<gateway>.up.railway.app/api/v1` | **el build falla a propósito** |
-| `NEXT_PUBLIC_SITE_URL` | `https://<frontend>.up.railway.app` | cae a `https://vinciinventa.com` (el fallback real en `lib/site.ts`, `app/robots.ts` y `app/sitemap.ts`) → canonical, `robots.txt` y `sitemap.xml` mal |
+| `NEXT_PUBLIC_SITE_URL` | `https://<frontend>.up.railway.app` | cae a `https://vinciinventa.com` (el fallback en `lib/site.ts`, fuente única) → canonical, `robots.txt` y `sitemap.xml` mal |
+| `NEXT_PUBLIC_GTM_ID` | ID del contenedor de GTM | no se carga GTM → no hay GA4 ni ningún tag |
+| `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | token del meta tag de Search Console | no se emite el meta → GSC pierde la verificación |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID de Google | el botón de Google queda muerto |
 | `NEXT_PUBLIC_GITHUB_CLIENT_ID` | Client ID de GitHub | el botón de GitHub queda muerto |
 | `ASSETS_SERVICE_URL` | **no setear** | correcto: `next.config.ts` ya cubre `https://**` en `remotePatterns` |
