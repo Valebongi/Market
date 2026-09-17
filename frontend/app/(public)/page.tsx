@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import LandingMarketplace from "./_components/LandingMarketplace";
+import HomeContent from "./_components/HomeContent";
+import { activeSocialLinks, CONTACT_EMAILS, PARENT_ORGANIZATION } from "@/lib/organization";
 import { serializeJsonLd } from "@/lib/security";
 import { SITE_URL } from "@/lib/site";
 
 const DESCRIPTION =
-  "Marketplace de activos intelectuales en Argentina. Software, diseños, marcas y modelos de negocio listos para licenciar. Conectá con titulares y hacé crecer tu proyecto.";
+  "Marketplace de licencias en Argentina. Encontrá software, diseños y marcas para licenciar, o publicá tu activo y monetizá tu propiedad intelectual.";
 
 export const metadata: Metadata = {
   // `absolute` evita que el template "%s | Da Vinci Inventa" del root layout
@@ -28,6 +30,8 @@ export const metadata: Metadata = {
   },
 };
 
+const sameAs = activeSocialLinks().map((l) => l.url);
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -35,9 +39,19 @@ const jsonLd = {
       "@type": "Organization",
       "@id": `${SITE_URL}/#organization`,
       name: "Da Vinci Inventa",
+      alternateName: "vinciinventa",
       url: SITE_URL,
-      logo: { "@type": "ImageObject", url: `${SITE_URL}/Logo DaVinci.png` },
+      // El espacio del nombre de archivo tiene que ir codificado para ser una URL válida.
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/Logo%20DaVinci.png` },
       description: DESCRIPTION,
+      areaServed: "AR",
+      email: CONTACT_EMAILS.soporte,
+      parentOrganization: {
+        "@type": "Organization",
+        name: PARENT_ORGANIZATION.name,
+        ...(PARENT_ORGANIZATION.url ? { url: PARENT_ORGANIZATION.url } : {}),
+      },
+      ...(sameAs.length ? { sameAs } : {}),
     },
     {
       "@type": "WebSite",
@@ -69,7 +83,9 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
-      <LandingMarketplace />
+      <LandingMarketplace>
+        <HomeContent />
+      </LandingMarketplace>
     </>
   );
 }

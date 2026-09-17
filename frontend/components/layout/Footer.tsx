@@ -1,4 +1,16 @@
+import Image from "next/image";
 import Link from "next/link";
+import { Facebook, Instagram, Linkedin, Twitter, Youtube, type LucideIcon } from "lucide-react";
+
+import { activeSocialLinks, SOCIAL_LABELS, type SocialNetwork } from "@/lib/organization";
+
+const SOCIAL_ICONS: Record<SocialNetwork, LucideIcon> = {
+  linkedin: Linkedin,
+  instagram: Instagram,
+  facebook: Facebook,
+  twitter: Twitter,
+  youtube: Youtube,
+};
 
 /**
  * El footer se renderiza en TODAS las páginas, así que cada entrada rota de acá
@@ -21,13 +33,17 @@ const footerLinks = {
     { href: "/register", label: "Publicar Activo" },
   ],
   soporte: [
-    { href: "/#como-funciona", label: "Cómo Funciona" },
+    { href: "/como-funciona", label: "Cómo Funciona" },
+    { href: "/recursos", label: "Guías sobre licencias" },
+    { href: "/sobre-nosotros", label: "Sobre Da Vinci Inventa" },
     { href: "/terms", label: "Términos y Condiciones" },
     { href: "/privacy", label: "Política de Privacidad" },
   ],
 };
 
 export default function Footer() {
+  const socialLinks = activeSocialLinks();
+
   return (
     <footer className="bg-midnight-blue text-white">
       <div className="container-market py-16">
@@ -35,15 +51,39 @@ export default function Footer() {
           {/* Brand Column */}
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">DV</span>
-              </div>
+              <Image
+                src="/Logo DaVinci.png"
+                alt="Da Vinci Inventa"
+                width={40}
+                height={40}
+                className="rounded-lg"
+              />
               <span className="font-semibold text-lg">Da Vinci Inventa</span>
             </div>
             <p className="text-sm text-white/60 max-w-xs leading-relaxed">
               Infraestructura digital para la intermediación de activos intelectuales.
               Conectamos ideas con oportunidades.
             </p>
+            {socialLinks.length > 0 && (
+              <ul className="mt-6 flex items-center gap-3">
+                {socialLinks.map(({ network, url }) => {
+                  const Icon = SOCIAL_ICONS[network];
+                  return (
+                    <li key={network}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={SOCIAL_LABELS[network]}
+                        className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+                      >
+                        <Icon className="h-4 w-4" />
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           {/* Producto */}
@@ -87,10 +127,10 @@ export default function Footer() {
 
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/60">
             © {new Date().getFullYear()} Da Vinci Inventa. Todos los derechos reservados.
           </p>
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/60">
             Plataforma SaaS de intermediación de licencias
           </p>
         </div>

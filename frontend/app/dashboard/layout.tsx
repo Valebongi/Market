@@ -78,7 +78,7 @@ export default function DashboardLayout({
           </button>
 
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Image src="/Logo DaVinci.png" alt="Da Vinci" width={30} height={30} className="rounded-lg" />
+            <Image src="/Logo DaVinci.png" alt="Da Vinci Inventa" width={30} height={30} className="rounded-lg" />
             <span className="font-display font-semibold text-sm text-midnight-blue dark:text-gray-100 tracking-tight">Da Vinci</span>
           </Link>
 

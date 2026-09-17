@@ -18,7 +18,8 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/assets", label: "Explorar Activos" },
-    { href: "/#como-funciona", label: "Cómo Funciona" },
+    { href: "/como-funciona", label: "Cómo Funciona" },
+    { href: "/recursos", label: "Guías" },
   ];
 
   const displayName = user?.profile?.displayName || user?.email?.split("@")[0] || "";
@@ -54,7 +55,7 @@ export default function Navbar() {
               href={link.href}
               className={cn(
                 "text-sm font-medium transition-colors hover:text-electric-blue dark:hover:text-blue-400",
-                pathname === link.href ? "text-electric-blue dark:text-blue-400" : "text-carbon-gray dark:text-gray-300"
+                pathname === link.href || pathname.startsWith(`${link.href}/`) ? "text-electric-blue dark:text-blue-400" : "text-carbon-gray dark:text-gray-300"
               )}
             >
               {link.label}

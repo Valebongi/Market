@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { Search, X, ChevronDown, ArrowRight, Upload } from "lucide-react";
 import Link from "next/link";
 import AssetCard from "@/components/assets/AssetCard";
@@ -43,7 +43,8 @@ const LICENSE_TYPES = [
   { value: "temporary",   label: "Temporal" },
 ];
 
-export default function LandingMarketplace() {
+// `children` = contenido estático renderizado en el servidor, sin sumar JS al cliente.
+export default function LandingMarketplace({ children }: { children?: ReactNode }) {
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [total, setTotal] = useState(0);
@@ -130,13 +131,14 @@ export default function LandingMarketplace() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-carbon-gray dark:text-white leading-[1.1] tracking-tight font-display">
-            Activos intelectuales<br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-electric-blue to-violet-500"> listos para licenciar</span>
+            Marketplace de licencias en Argentina<br className="hidden sm:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-electric-blue to-violet-500"> para software, diseños y marcas</span>
           </h1>
 
           <p className="mt-4 text-base sm:text-lg text-slate-gray dark:text-gray-400 max-w-xl mx-auto leading-relaxed">
-            Software, diseños, marcas y modelos de negocio probados.<br className="hidden sm:block" />
-            Encontrá el activo perfecto para tu próximo proyecto.
+            Da Vinci Inventa conecta a titulares de activos intelectuales con
+            emprendedores que quieren licenciarlos. Encontrá lo que necesitás o
+            publicá lo que creaste.
           </p>
 
           {/* Search bar */}
@@ -182,10 +184,7 @@ export default function LandingMarketplace() {
       </section>
 
       {/* ── CÓMO FUNCIONA ────────────────────────────────────────────
-          El `id` no es decorativo: el navbar y el footer enlazan
-          `/#como-funciona` desde TODAS las páginas del sitio y hasta ahora ese
-          ancla no existía — el único `id` de la home era `main-content`, así
-          que el enlace no llevaba a ningún lado.
+          Resumen: el detalle vive en /como-funciona.
 
           El copy es deliberadamente literal sobre lo que la plataforma hace y
           lo que no. No hay pagos, no hay verificación de titularidad y no hay
@@ -200,13 +199,12 @@ export default function LandingMarketplace() {
             id="como-funciona-title"
             className="text-2xl sm:text-3xl font-bold text-carbon-gray dark:text-gray-100 text-center"
           >
-            Cómo funciona
+            Cómo funciona el marketplace de propiedad intelectual
           </h2>
           <p className="mt-3 text-center text-base text-slate-gray dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Da Vinci Inventa es el lugar donde quien tiene un activo intelectual
-            —un software, un diseño, una marca, un modelo de negocio— se
-            encuentra con quien lo quiere usar. Nosotros los conectamos; el
-            acuerdo lo cierran ustedes.
+            Da Vinci Inventa es un marketplace de licencias: quien tiene un
+            activo intelectual lo publica y quien lo necesita le pide una
+            licencia. Nosotros los conectamos; el acuerdo lo cierran ustedes.
           </p>
 
           <div className="mt-10 grid gap-8 md:grid-cols-2">
@@ -214,17 +212,17 @@ export default function LandingMarketplace() {
               <h3 className="text-lg font-semibold text-carbon-gray dark:text-gray-100">
                 Si tenés algo para licenciar
               </h3>
-              <ol className="mt-4 space-y-3">
+              <ol className="mt-4 space-y-3 list-decimal pl-5 marker:font-semibold marker:text-carbon-gray dark:marker:text-gray-200">
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">1. Publicá el activo.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Publicá el activo.</span>{" "}
                   Contá qué es, qué tipo de licencia ofrecés y qué usos permitís.
                 </li>
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">2. Recibí solicitudes.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Recibí solicitudes.</span>{" "}
                   Quien esté interesado te escribe explicando para qué lo quiere.
                 </li>
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">3. Negociá vos.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Negociá vos.</span>{" "}
                   Conversan las condiciones y decidís a quién le decís que sí.
                 </li>
               </ol>
@@ -234,17 +232,17 @@ export default function LandingMarketplace() {
               <h3 className="text-lg font-semibold text-carbon-gray dark:text-gray-100">
                 Si buscás algo para tu proyecto
               </h3>
-              <ol className="mt-4 space-y-3">
+              <ol className="mt-4 space-y-3 list-decimal pl-5 marker:font-semibold marker:text-carbon-gray dark:marker:text-gray-200">
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">1. Explorá el catálogo.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Explorá el catálogo.</span>{" "}
                   Filtrá por categoría y por tipo de licencia hasta dar con lo que necesitás.
                 </li>
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">2. Solicitá la licencia.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Solicitá la licencia.</span>{" "}
                   Le mandás tu pedido al titular directamente desde la ficha del activo.
                 </li>
                 <li className="text-sm text-slate-gray dark:text-gray-400 leading-relaxed">
-                  <span className="font-semibold text-carbon-gray dark:text-gray-200">3. Acuerdan las condiciones.</span>{" "}
+                  <span className="font-semibold text-carbon-gray dark:text-gray-200">Acuerdan las condiciones.</span>{" "}
                   Si hay acuerdo, lo cierran entre ustedes con sus propios términos.
                 </li>
               </ol>
@@ -255,6 +253,11 @@ export default function LandingMarketplace() {
             Para que quede claro: la plataforma pone en contacto a las partes y
             aloja la conversación. No verificamos la titularidad de los activos,
             no procesamos pagos y no somos parte del contrato que ustedes firmen.
+          </p>
+          <p className="mt-4 text-center">
+            <Link href="/como-funciona" className="text-sm font-semibold text-electric-blue hover:underline">
+              Ver cómo funciona paso a paso
+            </Link>
           </p>
         </div>
       </section>
@@ -278,7 +281,9 @@ export default function LandingMarketplace() {
 
           {/* License filter */}
           <div className="relative">
+            <label htmlFor="home-license" className="sr-only">Tipo de licencia</label>
             <select
+              id="home-license"
               value={licenseType}
               onChange={(e) => { setLicenseType(e.target.value); setPage(1); }}
               className="appearance-none pl-3 pr-8 py-2 text-sm border border-fog-gray dark:border-white/10 rounded-lg bg-white dark:bg-gray-900 text-carbon-gray dark:text-gray-200 focus:outline-none focus:border-electric-blue cursor-pointer"
@@ -290,7 +295,9 @@ export default function LandingMarketplace() {
 
           {/* Sort */}
           <div className="relative">
+            <label htmlFor="home-sort" className="sr-only">Ordenar activos</label>
             <select
+              id="home-sort"
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
               className="appearance-none pl-3 pr-8 py-2 text-sm border border-fog-gray dark:border-white/10 rounded-lg bg-white dark:bg-gray-900 text-carbon-gray dark:text-gray-200 focus:outline-none focus:border-electric-blue cursor-pointer"
@@ -397,6 +404,8 @@ export default function LandingMarketplace() {
       </div>
       </div>
 
+      {children}
+
       {/* ── CTA STRIP ────────────────────────────────────────────────── */}
       <section className="border-t border-fog-gray dark:border-white/10 bg-gradient-to-r from-blue-50 via-white to-emerald-50 dark:from-[#0d1a2e] dark:via-[#0d1117] dark:to-[#0a1f1a]">
         <div className="container-market px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -405,9 +414,12 @@ export default function LandingMarketplace() {
               <Upload className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-semibold text-carbon-gray dark:text-gray-100">¿Tenés un activo para publicar?</p>
+              <h2 className="font-semibold text-carbon-gray dark:text-gray-100">
+                ¿Tenés un activo para publicar? Monetizá tu propiedad intelectual
+              </h2>
               <p className="text-sm text-slate-gray dark:text-gray-400 mt-0.5">
-                Monetizá tus creaciones conectándote con emprendedores que las necesitan.
+                Una forma de monetizar propiedad intelectual es licenciarla: la
+                usan emprendedores que la necesitan y vos seguís siendo su titular.
               </p>
             </div>
           </div>
