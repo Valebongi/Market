@@ -1,4 +1,5 @@
 import { LICENSE_TYPE_LABELS } from "@/lib/utils";
+import { landingForCategory } from "./category-landings";
 
 /**
  * Configuración compartida del catálogo: qué se lee de la URL, cómo se
@@ -71,11 +72,16 @@ export function catalogHref(
   const merged: CatalogParams = { ...base, ...overrides };
   const search = new URLSearchParams();
 
+  // Una categoría con landing propia va en el path, no en la querystring.
+  const landing = merged.category ? landingForCategory(merged.category) : undefined;
+  const path = landing ? `/assets/${landing.slug}` : "/assets";
+
   for (const key of CATALOG_PARAM_KEYS) {
+    if (landing && key === "category") continue;
     const value = merged[key];
     if (value) search.set(key, value);
   }
 
   const qs = search.toString();
-  return qs ? `/assets?${qs}` : "/assets";
+  return qs ? `${path}?${qs}` : path;
 }

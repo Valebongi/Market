@@ -12,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 import { assetsService as assetsApi, mapAsset } from "@/services/assets.service";
 import { cn, formatNumber } from "@/lib/utils";
 import type { Asset } from "@/types";
+import { getAssetCategoryLabel } from "@/lib/asset-categories";
 
 const DIGITAL_AXIOS_OWNER = "aa000000-0000-0000-0000-digitalaxios1";
 
@@ -45,7 +46,7 @@ function FeaturedCard({ asset }: { asset: Asset }) {
           {asset.coverImageUrl ? (
             <Image
               src={asset.coverImageUrl}
-              alt={asset.title}
+              alt={`${asset.title} – ${getAssetCategoryLabel(asset.assetType)}`}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
               className="object-cover group-hover:scale-105 transition-transform duration-300"
@@ -130,7 +131,7 @@ export default function FeaturedByDigitalAxios() {
               <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 tracking-widest uppercase">Digital Axios</span>
             </div>
             <h2 className="text-lg font-bold text-emerald-950 dark:text-gray-100 font-display">
-              Nuestros Productos
+              Activos intelectuales para emprendedores
             </h2>
           </div>
 
