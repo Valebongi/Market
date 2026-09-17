@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { HTML_LIMITED_BOT_UA_RE_STRING } from "next/dist/shared/lib/router/utils/is-bot";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -72,13 +71,10 @@ const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 // Next streamea la metadata y solo la bloquea dentro de <head> para los bots de
-// esta lista. La default no incluye crawlers de auditoría SEO: como no ejecutan
-// JS, leían canonical, robots y description fuera del <head> en /assets.
-// Se extiende la default en vez de reemplazarla para no perder los de Next.
-const HTML_LIMITED_BOTS = new RegExp(
-  `${HTML_LIMITED_BOT_UA_RE_STRING}|Screaming ?Frog|SemrushBot|AhrefsBot|Sitebulb|MJ12bot|DotBot`,
-  "i"
-);
+// esta lista. Con una lista, PageSpeed y las herramientas de auditoría veían
+// title, description y canonical fuera del <head> en /assets (metadata async).
+// `/.*/` la bloquea para todos: el HTML espera a `generateMetadata`.
+const HTML_LIMITED_BOTS = /.*/;
 
 const nextConfig: NextConfig = {
   htmlLimitedBots: HTML_LIMITED_BOTS,

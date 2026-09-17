@@ -17,7 +17,8 @@ const inter = Inter({
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["500", "600"],
-  display: "swap",
+  // "optional": sin swap tardío. Con "swap" el H1 de la home cambiaba de líneas al cargar la fuente (CLS 0.15).
+  display: "optional",
   variable: "--font-poppins",
 });
 
@@ -34,16 +35,6 @@ export const metadata: Metadata = {
     template: "%s | Da Vinci Inventa",
   },
   description: DESCRIPTION,
-  keywords: [
-    "marketplace licencias",
-    "propiedad intelectual Argentina",
-    "licencias software",
-    "licencias diseño",
-    "activos intelectuales",
-    "emprendedores",
-    "intermediación intelectual",
-    "Da Vinci Inventa",
-  ],
   authors: [{ name: "Da Vinci Inventa", url: SITE_URL }],
   creator: "Da Vinci Inventa",
   publisher: "Da Vinci Inventa",
